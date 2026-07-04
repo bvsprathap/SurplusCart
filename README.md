@@ -1,4 +1,3 @@
----
 # Surplus to Smiles — Agentic Food Distribution
 
 **A multi-agent AI system that rescues near-expiry food from
