@@ -142,12 +142,13 @@ async def get_root() -> str:
 
 # Global cache to prevent re-running the simulation on every refresh
 _CACHED_REPORT = None
+_CACHED_MAP = None
 _IS_RUNNING = False
 
 @app.get("/run", response_class=HTMLResponse)
 async def run_sim() -> str:
     """Run the simulation once and cache the HTML report."""
-    global _CACHED_REPORT, _IS_RUNNING
+    global _CACHED_REPORT, _CACHED_MAP, _IS_RUNNING
     
     if _CACHED_REPORT:
         return _CACHED_REPORT
@@ -161,13 +162,23 @@ async def run_sim() -> str:
         result = await run_simulation()
         
         html_content = result.get("report_html")
+        map_content = result.get("map_html", "<h1>Simulation complete. Check logs.</h1>")
+        
         if not html_content:
-            html_content = result.get("map_html", "<h1>Simulation complete.</h1><p>Check logs for details.</p>")
+            html_content = "<h1>Simulation complete.</h1><p>Check logs for details.</p>"
             
         _CACHED_REPORT = html_content
+        _CACHED_MAP = map_content
         return html_content
     finally:
         _IS_RUNNING = False
+
+@app.get("/map", response_class=HTMLResponse)
+async def get_map() -> str:
+    """Return the cached map HTML."""
+    if _CACHED_MAP:
+        return _CACHED_MAP
+    return "<h1>Map not available.</h1><p>Please run the simulation first at <a href='/'>home</a>.</p>"
 
 
 @app.post("/feedback")

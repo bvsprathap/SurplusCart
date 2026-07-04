@@ -377,9 +377,9 @@ def generate_map(
     """
     m.get_root().html.add_child(folium.Element(legend_html))
 
-    # Add the "View Report" button linking to latest_report.html
-    report_btn_html = """
-    <a href="latest_report.html" target="_blank"
+    report_link = "/" if os.environ.get("RUNNING_ON_CLOUD_RUN") else "latest_report.html"
+    report_btn_html = f"""
+    <a href="{report_link}" target="_blank"
        style="position:fixed; top:20px; right:20px; z-index:1000;
               background-color:#000517; color:#04D8D9; border:1px solid #04D8D9;
               padding:10px 20px; font-family:'Segoe UI', Arial, sans-serif; font-size:14px;
@@ -1170,6 +1170,8 @@ async def generate_full_report(
     audit_report = generate_audit_report(sim_day, world, dispatch_stats)
     message_log = get_message_log()
 
+    map_link = "/map" if os.environ.get("RUNNING_ON_CLOUD_RUN") else f"map_{run_id}.html"
+
     # Create the fully styled HTML Page
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1284,11 +1286,12 @@ async def generate_full_report(
       color: #087C81;
     }}
 
-    .btn-container {{
-      text-align: center;
-      margin: 40px auto;
-    }}
+
     .btn-map {{
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
       background-color: #04D8D9;
       color: #000517;
       padding: 12px 32px;
@@ -1310,6 +1313,8 @@ async def generate_full_report(
   </style>
 </head>
 <body>
+  <a href="{map_link}" target="_blank" class="btn-map">View Map</a>
+  
   <header>
     <img src="../assets/header.png" alt="Header Image" onerror="this.style.display='none';"/>
   </header>
@@ -1345,11 +1350,6 @@ async def generate_full_report(
       <h2>Delivery Routes and Dispatch Decisions</h2>
       {section_4_html}
       {audit_report}
-    </div>
-
-    <!-- Map Action Button -->
-    <div class="btn-container">
-      <a href="map_{run_id}.html" target="_blank" class="btn-map">View Map</a>
     </div>
   </div>
 
