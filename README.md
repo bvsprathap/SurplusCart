@@ -26,64 +26,61 @@ rescue pipeline for Chennai, India. The system:
 
 ```mermaid
 graph TD
-    subgraph DataLayer["Data Layer"]
-        CJ["catalog.json<br/>31 food items"]
-        WC["world_config.json<br/>5 stores, 5 care homes<br/>20 volunteers"]
+    O{"Orchestrator<br/>(main.py)"}
+
+    subgraph Initialization
+        CJ["catalog.json"]
+        WC["world_config.json"]
     end
 
     subgraph MCPServers["MCP Servers"]
-        SMCP["Store and Volunteer MCP<br/>get_pushable_inventory<br/>check_vehicle_availability<br/>get_volunteer_schedule"]
-        GMCP["Google Maps MCP<br/>cablate/mcp-google-map<br/>maps_distance_matrix<br/>maps_directions"]
+        SMCP["Store & Volunteer MCP"]
+        GMCP["Google Maps MCP"]
     end
 
-    subgraph Orchestrator
-        O["main.py<br/>run_simulation"]
+    subgraph Phase1["Phase 1: Negotiation"]
+        MA["Matchmaker Agent"]
+        CA["Culinary Agent"]
+        NA["Care Home Agent"]
     end
 
-    subgraph Phase1["Phase 1 - Per Care Home"]
-        MA["Matchmaker Agent<br/>LLM Gemini<br/>Quantity and priority judgment"]
-        CA["Culinary Agent<br/>LLM Gemini<br/>Dish framing"]
-        NA["Care Home Agent<br/>LLM Gemini<br/>Negotiation protocol"]
+    subgraph Phase2["Phase 2: Sourcing"]
+        SC["single_store_candidate()"]
+        SL["StockLedger"]
     end
 
-    subgraph Phase2["Phase 2 - Sourcing"]
-        SL["StockLedger<br/>Shared depleting stock<br/>Home 1 to 5 order"]
-        SC["single_store_candidate<br/>Urgency-based sourcing<br/>3-store cap"]
+    subgraph Phase3["Phase 3: Dispatch"]
+        D["run_dispatch()"]
+        Chain["1. Nearest<br/>2. Next<br/>3. Detour<br/>4. Store Truck<br/>5. Commercial"]
     end
 
-    subgraph DispatchLayer["Dispatch"]
-        D["run_dispatch<br/>Deterministic fallback chain"]
-        D1["1 Nearest volunteer"]
-        D2["2 Next volunteer<br/>2hr budget"]
-        D3["3 Detour bundle<br/>15min threshold"]
-        D4["4 Store truck"]
-        D5["5 Commercial pickup"]
+    subgraph Finalization
+        G["Pydantic Guardrails"]
+        R["Report Generator"]
     end
 
-    subgraph Guardrails
-        G["Pydantic validation<br/>OrderOutput<br/>DispatchOutput"]
-    end
-
-    subgraph OutputLayer["Output"]
-        R["Report Generator<br/>HTML report and Folium map"]
-        L["Cloud Logging<br/>GCP run_id tagged"]
-    end
-
+    %% Flow
     CJ --> O
     WC --> O
-    O --> SMCP
-    O --> GMCP
-    O --> MA
-    MA --> CA
-    CA --> NA
-    NA --> SC
-    SC --> SL
-    SL --> D
-    D --> D1 --> D2 --> D3 --> D4 --> D5
-    D --> G
-    G --> R
-    R --> L
 
+    %% Orchestrator connections
+    O -->|Query Inventory| SMCP
+    
+    O -->|1. Delegate| MA
+    MA -.->|A2A| CA -.->|A2A| NA
+    
+    O -->|2. Allocate| SC
+    SC -.-> SL
+    
+    O -->|3. Assign Routes| D
+    D -.->|Evaluate| Chain
+    D -.->|Check Schedules| SMCP
+    D -.->|Calculate Distance| GMCP
+    
+    O -->|4. Validate| G
+    O -->|5. Output| R
+
+    style O fill:#000517,color:#04D8D9,stroke:#04D8D9,stroke-width:2px
     style MA fill:#087C81,color:#EAFBFF
     style CA fill:#087C81,color:#EAFBFF
     style NA fill:#087C81,color:#EAFBFF
