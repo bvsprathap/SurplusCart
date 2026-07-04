@@ -9,7 +9,7 @@ Built as a capstone project for the Google x Kaggle 5-Day AI
 Agents Intensive Vibe Coding Course (Track: Agents for Good).
 
 ## Live Demo
-**https://food-rescue-989012206196.us-east1.run.app/**
+**https://food-rescue-xqf2z5l6hq-ue.a.run.app/**
 Publicly accessible — no login required. Triggers a full
 simulated day run and displays the operations report and map.
 
