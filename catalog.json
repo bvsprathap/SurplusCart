@@ -1,0 +1,219 @@
+[
+  {
+    "name": "milk",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "units"
+  },
+  {
+    "name": "curd",
+    "is_perishable": true,
+    "is_essential": false,
+    "push_threshold_days": 1,
+    "unit": "units"
+  },
+  {
+    "name": "bread",
+    "is_perishable": true,
+    "is_essential": false,
+    "push_threshold_days": 1,
+    "unit": "units"
+  },
+  {
+    "name": "tomatoes",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "leafy vegetables",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "units"
+  },
+  {
+    "name": "chicken",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "eggs",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "units"
+  },
+  {
+    "name": "bananas",
+    "is_perishable": true,
+    "is_essential": false,
+    "push_threshold_days": 1,
+    "unit": "units"
+  },
+  {
+    "name": "onions",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "potatoes",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "ladies finger",
+    "is_perishable": true,
+    "is_essential": false,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "carrots",
+    "is_perishable": true,
+    "is_essential": false,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "ginger",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "garlic",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "green chilies",
+    "is_perishable": true,
+    "is_essential": true,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "paneer",
+    "is_perishable": true,
+    "is_essential": false,
+    "push_threshold_days": 1,
+    "unit": "kg"
+  },
+  {
+    "name": "raw rice",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "toor dal",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "moong dal",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "whole wheat",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "wheat flour",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "cooking oil",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "KG"
+  },
+  {
+    "name": "salt",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "sugar",
+    "is_perishable": false,
+    "is_essential": false,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "turmeric",
+    "is_perishable": false,
+    "is_essential": false,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "chili powder",
+    "is_perishable": false,
+    "is_essential": false,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "mustard seeds",
+    "is_perishable": false,
+    "is_essential": false,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "coriander powder",
+    "is_perishable": false,
+    "is_essential": false,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "cumin seeds",
+    "is_perishable": false,
+    "is_essential": false,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "garam masala",
+    "is_perishable": false,
+    "is_essential": false,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  },
+  {
+    "name": "tamarind",
+    "is_perishable": false,
+    "is_essential": true,
+    "push_threshold_days": 7,
+    "unit": "kg"
+  }
+]

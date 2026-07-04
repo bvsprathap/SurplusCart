@@ -1,0 +1,36 @@
+# Environment variables
+.env
+
+# Python virtual environment
+.venv/
+env/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ADK SQLite/session databases
+.adk/
+session.db
+
+# Project temporary / build files
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ty_cache/
+
+# User configurations
+world_config.json.bak
+
+# Reports output and assets
+reports/output/
+reports/assets/header.png
+reports/assets/footer.png
+requirements_check.txt

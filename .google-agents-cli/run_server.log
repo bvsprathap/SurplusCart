@@ -1,0 +1,54 @@
+   Building scaffold-temp @ file:///C:/Users/bvspr/.gemini/Projects/Food%20to%20Go
+      Built scaffold-temp @ file:///C:/Users/bvspr/.gemini/Projects/Food%20to%20Go
+Installed 7 packages in 384ms
+WARNING: The --reload flag is not supported on Windows because it forces Uvicorn to use SelectorEventLoop, which does not support subprocesses (needed for executing tools). Forcing --no-reload.
+2026-07-03 00:44:49,204 - INFO - service_factory.py:266 - Using in-memory memory service
+2026-07-03 00:44:49,204 - INFO - local_storage.py:88 - Using per-agent session storage rooted at C:\Users\bvspr\.gemini\Projects\Food to Go
+2026-07-03 00:44:49,242 - INFO - local_storage.py:120 - Using per-agent artifact storage rooted at C:\Users\bvspr\.gemini\Projects\Food to Go
+C:\Users\bvspr\.gemini\Projects\Food to Go\.venv\Lib\site-packages\google\adk\cli\fast_api.py:553: UserWarning: [EXPERIMENTAL] InMemoryCredentialService: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+  credential_service = InMemoryCredentialService()
+C:\Users\bvspr\.gemini\Projects\Food to Go\.venv\Lib\site-packages\google\adk\auth\credential_service\in_memory_credential_service.py:33: UserWarning: [EXPERIMENTAL] BaseCredentialService: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+  super().__init__()
+INFO:     Started server process [49696]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51205 - "GET / HTTP/1.1" 404 Not Found
+2026-07-03 00:44:49,966 - INFO - local_storage.py:64 - Creating local session service at C:\Users\bvspr\.gemini\Projects\Food to Go\agents\.adk\session.db
+2026-07-03 00:44:50,038 - INFO - api_server.py:860 - New session created: b99e92da-cb37-4958-8c62-ca44d8a400fd
+INFO:     127.0.0.1:51206 - "POST /apps/agents/users/cli-user/sessions HTTP/1.1" 200 OK
+2026-07-03 00:44:50,049 - INFO - envs.py:83 - Loaded .env file for agents at C:\Users\bvspr\.gemini\Projects\Food to Go\.env
+2026-07-03 00:44:50,050 - INFO - envs.py:83 - Loaded .env file for agents at C:\Users\bvspr\.gemini\Projects\Food to Go\.env
+INFO:     127.0.0.1:51207 - "POST /run_sse HTTP/1.1" 200 OK
+C:\Users\bvspr\.gemini\Projects\Food to Go\.venv\Lib\site-packages\google\adk\tools\function_tool.py:95: UserWarning: [EXPERIMENTAL] feature FeatureName.JSON_SCHEMA_FOR_FUNC_DECL is enabled.
+  build_function_declaration(
+2026-07-03 00:44:51,055 - INFO - _api_client.py:721 - The project/location from the environment variables will take precedence over the API key from the environment variables.
+2026-07-03 00:44:52,020 - INFO - google_llm.py:210 - Sending out request, model: gemini-flash-latest, backend: GoogleLLMVariant.VERTEX_AI, stream: False
+2026-07-03 00:44:55,529 - INFO - google_llm.py:279 - Response received from the model.
+   Building temp-a2a @ file:///C:/Users/bvspr/.gemini/Projects/Food%20to%20Go
+      Built temp-a2a @ file:///C:/Users/bvspr/.gemini/Projects/Food%20to%20Go
+Installed 4 packages in 58ms
+WARNING: The --reload flag is not supported on Windows because it forces Uvicorn to use SelectorEventLoop, which does not support subprocesses (needed for executing tools). Forcing --no-reload.
+2026-07-03 00:51:27,233 - INFO - service_factory.py:266 - Using in-memory memory service
+2026-07-03 00:51:27,233 - INFO - local_storage.py:88 - Using per-agent session storage rooted at C:\Users\bvspr\.gemini\Projects\Food to Go
+2026-07-03 00:51:27,233 - INFO - local_storage.py:120 - Using per-agent artifact storage rooted at C:\Users\bvspr\.gemini\Projects\Food to Go
+C:\Users\bvspr\.gemini\Projects\Food to Go\.venv\Lib\site-packages\google\adk\cli\fast_api.py:553: UserWarning: [EXPERIMENTAL] InMemoryCredentialService: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+  credential_service = InMemoryCredentialService()
+C:\Users\bvspr\.gemini\Projects\Food to Go\.venv\Lib\site-packages\google\adk\auth\credential_service\in_memory_credential_service.py:33: UserWarning: [EXPERIMENTAL] BaseCredentialService: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+  super().__init__()
+INFO:     Started server process [47596]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54467 - "GET / HTTP/1.1" 404 Not Found
+2026-07-03 00:51:27,968 - INFO - local_storage.py:64 - Creating local session service at C:\Users\bvspr\.gemini\Projects\Food to Go\agents\.adk\session.db
+2026-07-03 00:51:28,039 - INFO - api_server.py:860 - New session created: 4b9c52e5-3557-4a25-b9ae-8a03890bafc6
+INFO:     127.0.0.1:54468 - "POST /apps/agents/users/cli-user/sessions HTTP/1.1" 200 OK
+2026-07-03 00:51:28,053 - INFO - envs.py:83 - Loaded .env file for agents at C:\Users\bvspr\.gemini\Projects\Food to Go\.env
+2026-07-03 00:51:28,054 - INFO - envs.py:83 - Loaded .env file for agents at C:\Users\bvspr\.gemini\Projects\Food to Go\.env
+INFO:     127.0.0.1:54469 - "POST /run_sse HTTP/1.1" 200 OK
+C:\Users\bvspr\.gemini\Projects\Food to Go\.venv\Lib\site-packages\google\adk\tools\function_tool.py:95: UserWarning: [EXPERIMENTAL] feature FeatureName.JSON_SCHEMA_FOR_FUNC_DECL is enabled.
+  build_function_declaration(
+2026-07-03 00:51:29,165 - INFO - _api_client.py:721 - The project/location from the environment variables will take precedence over the API key from the environment variables.
+2026-07-03 00:51:29,961 - INFO - google_llm.py:210 - Sending out request, model: gemini-flash-latest, backend: GoogleLLMVariant.VERTEX_AI, stream: False
+2026-07-03 00:51:33,197 - INFO - google_llm.py:279 - Response received from the model.

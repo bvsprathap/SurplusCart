@@ -1,0 +1,308 @@
+{
+  "availability_rate": 0.7,
+  "stores": [
+    {
+      "store_id": "store_01",
+      "name": "Sri Balaji Supermarket, T. Nagar",
+      "latitude": 13.0418,
+      "longitude": 80.2341,
+      "has_own_truck": true,
+      "truck_capacity_kg": 3000
+    },
+    {
+      "store_id": "store_02",
+      "name": "Chennai Organic Plaza, Velachery",
+      "latitude": 12.9816,
+      "longitude": 80.2209,
+      "has_own_truck": true,
+      "truck_capacity_kg": 1500
+    },
+    {
+      "store_id": "store_03",
+      "name": "Royal Provision Store, Mylapore",
+      "latitude": 13.0368,
+      "longitude": 80.2676,
+      "has_own_truck": true,
+      "truck_capacity_kg": 3000
+    },
+    {
+      "store_id": "store_04",
+      "name": "Ganga Departmental Store, Guindy",
+      "latitude": 13.0067,
+      "longitude": 80.2206,
+      "has_own_truck": true,
+      "truck_capacity_kg": 2000
+    },
+    {
+      "store_id": "store_05",
+      "name": "Metro Food Mart, Anna Nagar",
+      "latitude": 13.0850,
+      "longitude": 80.2101,
+      "has_own_truck": true,
+      "truck_capacity_kg": 1500
+    }
+  ],
+  "care_homes": [
+    {
+      "care_home_id": "home_01",
+      "name": "Anbu Illam Home",
+      "latitude": 13.0012,
+      "longitude": 80.2565,
+      "hard_constraints": {
+        "vegetarian_only": false,
+        "has_young_children": true
+      },
+      "resident_count": 50,
+      "storage_capacity_kg": 250.0,
+      "negotiates_via_a2a": true,
+      "memory_notes": [
+        {
+          "item": "wheat flour",
+          "type": "exclude",
+          "value": null
+        },
+        {
+          "item": "milk",
+          "type": "max_quantity",
+          "value": 20.0
+        }
+      ]
+    },
+    {
+      "care_home_id": "home_02",
+      "name": "Karuna Trust Home",
+      "latitude": 13.0569,
+      "longitude": 80.2425,
+      "hard_constraints": {
+        "vegetarian_only": true,
+        "has_young_children": false
+      },
+      "resident_count": 45,
+      "storage_capacity_kg": 225.0,
+      "negotiates_via_a2a": true,
+      "memory_notes": [
+        {
+          "item": "chicken",
+          "type": "exclude",
+          "value": null
+        }
+      ]
+    },
+    {
+      "care_home_id": "home_03",
+      "name": "Nethaji Childrens Home",
+      "latitude": 13.0525,
+      "longitude": 80.2122,
+      "hard_constraints": {
+        "vegetarian_only": false,
+        "has_young_children": true
+      },
+      "resident_count": 30,
+      "storage_capacity_kg": 150.0,
+      "negotiates_via_a2a": true,
+      "memory_notes": [
+        {
+          "item": "sugar",
+          "type": "max_quantity",
+          "value": 30.0
+        }
+      ]
+    },
+    {
+      "care_home_id": "home_04",
+      "name": "Asha Sadan Home",
+      "latitude": 13.0374,
+      "longitude": 80.1573,
+      "hard_constraints": {
+        "vegetarian_only": true,
+        "has_young_children": true
+      },
+      "resident_count": 40,
+      "storage_capacity_kg": 200.0,
+      "negotiates_via_a2a": true,
+      "memory_notes": []
+    },
+    {
+      "care_home_id": "home_05",
+      "name": "Sneha Care Home",
+      "latitude": 13.0139,
+      "longitude": 80.2530,
+      "hard_constraints": {
+        "vegetarian_only": false,
+        "has_young_children": false
+      },
+      "resident_count": 60,
+      "storage_capacity_kg": 300.0,
+      "negotiates_via_a2a": false,
+      "memory_notes": [
+        {
+          "item": "bread",
+          "type": "exclude",
+          "value": null
+        }
+      ]
+    }
+  ],
+  "volunteers": [
+    {
+      "volunteer_id": "vol_01",
+      "name": "Suresh",
+      "latitude": 13.0435,
+      "longitude": 80.2355,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_02",
+      "name": "Senthil",
+      "latitude": 13.0401,
+      "longitude": 80.2318,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_03",
+      "name": "Akash",
+      "latitude": 12.9825,
+      "longitude": 80.2195,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_04",
+      "name": "Saravanan",
+      "latitude": 12.9802,
+      "longitude": 80.2228,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_05",
+      "name": "Ananya",
+      "latitude": 13.0355,
+      "longitude": 80.2690,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_06",
+      "name": "Arjun",
+      "latitude": 13.0078,
+      "longitude": 80.2218,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_07",
+      "name": "Bhavya",
+      "latitude": 13.0862,
+      "longitude": 80.2088,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_08",
+      "name": "Deepak",
+      "latitude": 13.0025,
+      "longitude": 80.2578,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_09",
+      "name": "Divya",
+      "latitude": 12.9998,
+      "longitude": 80.2550,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_10",
+      "name": "Hari",
+      "latitude": 13.0555,
+      "longitude": 80.2438,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_11",
+      "name": "Ishaan",
+      "latitude": 13.0582,
+      "longitude": 80.2410,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_12",
+      "name": "Karthik",
+      "latitude": 13.0512,
+      "longitude": 80.2135,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_13",
+      "name": "Kavya",
+      "latitude": 13.0388,
+      "longitude": 80.1588,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_14",
+      "name": "Meera",
+      "latitude": 13.0152,
+      "longitude": 80.2518,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_15",
+      "name": "Pranav",
+      "latitude": 13.0732,
+      "longitude": 80.2609,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_16",
+      "name": "Rohan",
+      "latitude": 13.0341,
+      "longitude": 80.2490,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_17",
+      "name": "Sanjay",
+      "latitude": 13.0285,
+      "longitude": 80.2152,
+      "vehicle_type": "two_wheeler",
+      "capacity_kg": 15.0
+    },
+    {
+      "volunteer_id": "vol_18",
+      "name": "Shruti",
+      "latitude": 13.0502,
+      "longitude": 80.2290,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_19",
+      "name": "Vijay",
+      "latitude": 13.0203,
+      "longitude": 80.2298,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    },
+    {
+      "volunteer_id": "vol_20",
+      "name": "Vikram",
+      "latitude": 13.0502,
+      "longitude": 80.2609,
+      "vehicle_type": "car",
+      "capacity_kg": 60.0
+    }
+  ]
+}
