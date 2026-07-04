@@ -27,47 +27,47 @@ rescue pipeline for Chennai, India. The system:
 
 ```mermaid
 graph TD
-    subgraph Data Layer
-        CJ[catalog.json\n31 food items]
-        WC[world_config.json\n5 stores, 5 care homes\n20 volunteers]
+    subgraph DataLayer["Data Layer"]
+        CJ["catalog.json<br/>31 food items"]
+        WC["world_config.json<br/>5 stores, 5 care homes<br/>20 volunteers"]
     end
 
-    subgraph MCP Servers
-        SMCP[Store & Volunteer MCP\nget_pushable_inventory\ncheck_vehicle_availability\nget_volunteer_schedule]
-        GMCP[Google Maps MCP\ncablate/mcp-google-map\nmaps_distance_matrix\nmaps_directions]
+    subgraph MCPServers["MCP Servers"]
+        SMCP["Store and Volunteer MCP<br/>get_pushable_inventory<br/>check_vehicle_availability<br/>get_volunteer_schedule"]
+        GMCP["Google Maps MCP<br/>cablate/mcp-google-map<br/>maps_distance_matrix<br/>maps_directions"]
     end
 
     subgraph Orchestrator
-        O[main.py\nrun_simulation]
+        O["main.py<br/>run_simulation"]
     end
 
-    subgraph Phase 1 - Per Care Home
-        MA[Matchmaker Agent\nLLM - Gemini\nQuantity & priority judgment]
-        CA[Culinary Agent\nLLM - Gemini\nDish framing]
-        NA[Care Home Agent\nLLM - Gemini\nNegotiation protocol]
+    subgraph Phase1["Phase 1 - Per Care Home"]
+        MA["Matchmaker Agent<br/>LLM Gemini<br/>Quantity and priority judgment"]
+        CA["Culinary Agent<br/>LLM Gemini<br/>Dish framing"]
+        NA["Care Home Agent<br/>LLM Gemini<br/>Negotiation protocol"]
     end
 
-    subgraph Phase 2 - Sourcing
-        SL[StockLedger\nShared depleting stock\nHome 1 to 5 order]
-        SC[single_store_candidate\nUrgency-based sourcing\n3-store cap]
+    subgraph Phase2["Phase 2 - Sourcing"]
+        SL["StockLedger<br/>Shared depleting stock<br/>Home 1 to 5 order"]
+        SC["single_store_candidate<br/>Urgency-based sourcing<br/>3-store cap"]
     end
 
-    subgraph Dispatch
-        D[run_dispatch\nDeterministic fallback chain]
-        D1[1 Nearest volunteer]
-        D2[2 Next volunteer\n2hr budget]
-        D3[3 Detour bundle\n15min threshold]
-        D4[4 Store truck]
-        D5[5 Commercial pickup]
+    subgraph DispatchLayer["Dispatch"]
+        D["run_dispatch<br/>Deterministic fallback chain"]
+        D1["1 Nearest volunteer"]
+        D2["2 Next volunteer<br/>2hr budget"]
+        D3["3 Detour bundle<br/>15min threshold"]
+        D4["4 Store truck"]
+        D5["5 Commercial pickup"]
     end
 
     subgraph Guardrails
-        G[Pydantic validation\nOrderOutput\nDispatchOutput]
+        G["Pydantic validation<br/>OrderOutput<br/>DispatchOutput"]
     end
 
-    subgraph Output
-        R[Report Generator\nHTML report + Folium map]
-        L[Cloud Logging\nGCP - run_id tagged]
+    subgraph OutputLayer["Output"]
+        R["Report Generator<br/>HTML report and Folium map"]
+        L["Cloud Logging<br/>GCP run_id tagged"]
     end
 
     CJ --> O
