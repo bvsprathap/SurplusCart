@@ -136,6 +136,7 @@ class NegotiationResult(BaseModel):
     urgent_item_names: List[str] = []
     negotiation_transcript: List[NegotiationTurn] = []
     rejection_message: Optional[str] = None
+    offer_message: str = ""
 
 
 # ---------------------------------------------------------------------------

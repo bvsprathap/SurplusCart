@@ -1,0 +1,106 @@
+# Walkthrough — Prompts 9 & 10: Dispatch + Report Generator
+
+## Prompt 9: Dispatch Module ([tools/dispatch.py](file:///c:/Users/bvspr/.gemini/Projects/Food to Go/tools/dispatch.py))
+
+### Architecture
+
+Pure deterministic Python — zero LLM calls. Accepts **async callable parameters** instead of McpToolset objects for full testability.
+
+**Boundary**: Runs after orchestrator Phase 2 (single_store_candidate, StockLedger deduction, Order creation). Does not call any of those.
+
+### 5-Step Fallback Chain (per batch of ≤2 orders, per store)
+
+| Step | Mechanism | Constraint |
+|------|-----------|------------|
+| 1 | Nearest volunteer | capacity_kg ≥ payload_kg |
+| 2 | Next volunteer | total route ≤ 120 min |
+| 3 | 15-min detour bundle | `check_detour_bundle()` exposed publicly |
+| 4 | Store's own truck | `get_truck_avail` callable |
+| 5 | Commercial pickup | Always succeeds; uses `COMMERCIAL_CAPACITY_SENTINEL` |
+
+Each candidate is validated via `DispatchOutput` guardrail — failure falls to next tier.
+
+### New Model Added
+
+`DispatchStats` in [models.py](file:///c:/Users/bvspr/.gemini/Projects/Food to Go/tools/models.py): tracks total/volunteer/truck/commercial counts, unavailable volunteers, urgent fallbacks, bundled detours.
+
+### Test Suite ([test_dispatch.py](file:///c:/Users/bvspr/.gemini/Projects/Food to Go/tests/test_dispatch.py))
+
+| Category | Count |
+|----------|-------|
+| Helper functions (grouping, batching, payload, urgency, formatting) | 12 |
+| `check_detour_bundle` — direct call (boundary case included) | 3 |
+| Happy path (volunteer assignment) | 2 |
+| Capacity check + fallback | 2 |
+| Time budget fallback | 1 |
+| Store truck fallback | 1 |
+| Commercial fallback + needs_commercial | 2 |
+| Urgent item guarantee (truck + commercial) | 2 |
+| Stats accuracy + unavailable count | 2 |
+| Confirmation messages (volunteer, store, truck label, commercial) | 4 |
+| Guardrail fallthrough + 3-order batching | 2 |
+| **Total** | **33** |
+
+---
+
+## Prompt 10: Report Generator ([reports/report_generator.py](file:///c:/Users/bvspr/.gemini/Projects/Food to Go/reports/report_generator.py))
+
+### Four Sections
+
+| Function | Output | Notes |
+|----------|--------|-------|
+| `generate_delivery_table()` | pandas-formatted console table | Urgent items marked ★ |
+| `generate_map()` | Folium HTML → `reports/output/map_{run_id}.html` | Green/blue/orange polylines + legend |
+| `generate_negotiation_report()` | Text transcript per care home | All 5 homes; auto-accept / rejection noted |
+| `generate_audit_report()` | Store inventory + dispatch stats | Pushed vs held-back with threshold context |
+
+`generate_full_report()` calls all four and returns:
+```python
+{
+    "delivery_table": str,
+    "map_filepath": str,
+    "negotiation_report": str,
+    "audit_report": str,
+    "message_log": List[dict],
+}
+```
+
+### Map Details
+- Center: Chennai (13.0827, 80.2707), tiles: CartoDB positron
+- Store markers → blue FA `shopping-cart`
+- Care home markers → green FA `home`
+- Volunteer dots → grey `CircleMarker`
+- Routes: green (volunteer), blue (store truck), orange dashed (commercial)
+- Legend injected as HTML element
+
+### Test Suite ([test_report_generator.py](file:///c:/Users/bvspr/.gemini/Projects/Food to Go/tests/test_report_generator.py))
+
+Uses `monkeypatch` to redirect `_REPORTS_DIR` to `tmp_path` — no file pollution.
+
+| Category | Count |
+|----------|-------|
+| Delivery table (names, ★, volunteer, empty) | 7 |
+| Map (filepath, HTML content, legend, run_id, no-overwrite) | 7 |
+| Negotiation report (all 5 homes, auto-accept, rejection, transcript, ★) | 8 |
+| Audit report (pushed counts, held-back, stats, commercial warning, expiry) | 7 |
+| Full report (dict keys, non-empty, map file created) | 3 |
+| Output dir auto-creation | 2 |
+| **Total** | **34** |
+
+---
+
+## Full Test Suite Results
+
+```
+167 passed in ~95s
+```
+
+| Suite | Count | Status |
+|-------|-------|--------|
+| test_report_generator.py | 34 | ✅ |
+| test_dispatch.py | 33 | ✅ |
+| test_care_home_agent.py | 22 | ✅ |
+| test_culinary_agent.py | 7 | ✅ |
+| test_matchmaker_agent.py | 17 | ✅ |
+| test_tools.py | 54 | ✅ |
+| **Total** | **167** | **167/167 PASS** |

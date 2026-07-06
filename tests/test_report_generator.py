@@ -54,11 +54,11 @@ from tools.models import (
 def _make_world() -> WorldConfig:
     catalog = [
         FoodCatalogItem(name="milk", is_perishable=True, is_essential=True,
-                        push_threshold_days=1, unit="units"),
+                        push_threshold_days=1, unit="units", approx_weight_kg=1.0, cap_category="test"),
         FoodCatalogItem(name="rice", is_perishable=False, is_essential=True,
-                        push_threshold_days=7, unit="kg"),
+                        push_threshold_days=7, unit="kg", approx_weight_kg=1.0, cap_category="test"),
         FoodCatalogItem(name="lentils", is_perishable=False, is_essential=False,
-                        push_threshold_days=14, unit="kg"),
+                        push_threshold_days=14, unit="kg", approx_weight_kg=1.0, cap_category="test"),
     ]
     stores = [
         Store(store_id="store_01", name="Sri Balaji Supermarket",
@@ -295,26 +295,26 @@ class TestDeliveryTable:
     def test_returns_non_empty_string(self):
         rg = _import_rg()
         world = _make_world()
-        result = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
+        result, _ = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_contains_store_name(self):
         rg = _import_rg()
         world = _make_world()
-        result = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
+        result, _ = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
         assert "Sri Balaji Supermarket" in result
 
     def test_contains_care_home_name(self):
         rg = _import_rg()
         world = _make_world()
-        result = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
+        result, _ = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
         assert "Anbu Illam Home" in result
 
     def test_urgent_items_marked_with_star(self):
         rg = _import_rg()
         world = _make_world()
-        result = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
+        result, _ = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
         assert "★" in result
         assert "milk" in result
 
@@ -322,20 +322,20 @@ class TestDeliveryTable:
         rg = _import_rg()
         world = _make_world()
         # ord_02 has no urgent items — table should still render without crash
-        result = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
+        result, _ = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
         assert "Store Truck" in result or "store_truck" in result.lower()
 
     def test_empty_deliveries_returns_string(self):
         rg = _import_rg()
         world = _make_world()
-        result = rg.generate_delivery_table([], [], world)
+        result, _ = rg.generate_delivery_table([], [], world)
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_volunteer_name_in_method_column(self):
         rg = _import_rg()
         world = _make_world()
-        result = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
+        result, _ = rg.generate_delivery_table(_make_deliveries(), _make_orders(), world)
         assert "Priya Sharma" in result
 
 
@@ -354,49 +354,49 @@ class TestGenerateMap:
     def test_saves_html_to_correct_path(self, tmp_path):
         rg = _import_rg()
         world = _make_world()
-        filepath = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
+        filepath, _ = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
         assert filepath.endswith("map_test-run-01.html")
         assert os.path.exists(filepath)
 
     def test_html_contains_store_name(self, tmp_path):
         rg = _import_rg()
         world = _make_world()
-        filepath = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
+        filepath, _ = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
         content = Path(filepath).read_text(encoding="utf-8")
         assert "Sri Balaji Supermarket" in content
 
     def test_html_contains_care_home_name(self, tmp_path):
         rg = _import_rg()
         world = _make_world()
-        filepath = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
+        filepath, _ = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
         content = Path(filepath).read_text(encoding="utf-8")
         assert "Anbu Illam Home" in content
 
     def test_html_contains_volunteer_name(self, tmp_path):
         rg = _import_rg()
         world = _make_world()
-        filepath = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
+        filepath, _ = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
         content = Path(filepath).read_text(encoding="utf-8")
         assert "Priya Sharma" in content
 
     def test_html_contains_legend(self, tmp_path):
         rg = _import_rg()
         world = _make_world()
-        filepath = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
+        filepath, _ = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
         content = Path(filepath).read_text(encoding="utf-8")
         assert "Delivery Method" in content
 
     def test_filepath_uses_run_id(self, tmp_path):
         rg = _import_rg()
         world = _make_world()
-        filepath = rg.generate_map([], [], world, "unique-run-xyz")
+        filepath, _ = rg.generate_map([], [], world, "unique-run-xyz")
         assert "unique-run-xyz" in filepath
 
     def test_no_overwrite_different_run_ids(self, tmp_path):
         rg = _import_rg()
         world = _make_world()
-        fp1 = rg.generate_map([], [], world, "run-alpha")
-        fp2 = rg.generate_map([], [], world, "run-beta")
+        fp1, _ = rg.generate_map([], [], world, "run-alpha")
+        fp2, _ = rg.generate_map([], [], world, "run-beta")
         assert fp1 != fp2
         assert os.path.exists(fp1)
         assert os.path.exists(fp2)
@@ -475,6 +475,32 @@ class TestNegotiationReport:
         for ch in world.care_homes:
             assert ch.name in result
 
+    def test_final_notice_deduplication(self):
+        """Test that multiple orders for the same home do not duplicate the final notice message."""
+        rg = _import_rg()
+        world = _make_world()
+        
+        # 3 orders for the same home, all with the exact same final_notice message
+        notice = {"message": "We have arranged delivery of milk for you today.\nUnfortunately carrots could not be included."}
+        orders = [
+            Order(order_id="1", care_home_id="home_01", store_id="store_01", items=[], final_notice=notice),
+            Order(order_id="2", care_home_id="home_01", store_id="store_02", items=[], final_notice=notice),
+            Order(order_id="3", care_home_id="home_01", store_id="store_03", items=[], final_notice=notice),
+        ]
+        
+        # We need a negotiation result to trigger the html_part branch that prints final notice
+        mock_result = NegotiationResult(
+            care_home_id="home_01", status="agreed", agreed_items=[], urgent_item_names=[], negotiation_transcript=[]
+        )
+        results_list = [mock_result]
+        
+        result = rg.generate_negotiation_report(results_list, orders, world)
+        
+        # The message should only appear exactly ONCE in the HTML block for this care home
+        # Use simple string counting
+        msg_count = result.count("We have arranged delivery of milk")
+        assert msg_count == 1, f"Expected final notice message to appear exactly once, but found it {msg_count} times."
+
 
 # ---------------------------------------------------------------------------
 # SECTION 4 — generate_audit_report
@@ -547,6 +573,41 @@ class TestAuditReport:
 
 
 # ---------------------------------------------------------------------------
+# SECTION — generate_summary_page
+# ---------------------------------------------------------------------------
+
+class TestGenerateSummaryPage:
+    @pytest.fixture(autouse=True)
+    def clean_output(self, tmp_path, monkeypatch):
+        import reports.report_generator as rg
+        monkeypatch.setattr(rg, "_REPORTS_DIR", tmp_path)
+        yield tmp_path
+
+    def test_summary_page_generation(self):
+        rg = _import_rg()
+        world = _make_world()
+        sim_day = _make_sim_day(world)
+        deliveries = _make_deliveries()
+        orders = _make_orders()
+        negotiation_results = _make_negotiation_results()
+        dispatch_stats = _make_dispatch_stats()
+        
+        filepath, html = rg.generate_summary_page(
+            deliveries, orders, negotiation_results, dispatch_stats, world, sim_day, "summary-test-01"
+        )
+        
+        assert "summary_summary-test-01.html" in filepath
+        assert "SurplusCart &mdash; Daily Impact Summary" in html
+        assert "Food Rescued (kg)" in html
+        assert "Meals Served" in html
+        assert "Care Homes Served" in html
+        assert "CO2e Avoided" in html
+        # Buttons check
+        assert "View Detailed Report" in html
+        assert "View Delivery Map" in html
+        
+
+# ---------------------------------------------------------------------------
 # SECTION — generate_full_report
 # ---------------------------------------------------------------------------
 
@@ -572,12 +633,16 @@ class TestGenerateFullReport:
             run_id="full-test-01",
         )
         assert set(result.keys()) == {
-            "delivery_table",
+            "report_html",
+            "map_html",
+            "summary_html",
+            "report_filepath",
             "map_filepath",
+            "summary_filepath",
+            "delivery_table",
             "negotiation_report",
             "audit_report",
             "message_log",
-            "report_filepath",
             "stats"
         }
 
@@ -600,6 +665,61 @@ class TestGenerateFullReport:
         assert len(result["negotiation_report"]) > 0
         assert len(result["audit_report"]) > 0
         assert isinstance(result["message_log"], list)
+
+    def test_audit_allocation_math(self):
+        """Test that Pushed Qty = Sum of Allocated + Unallocated across multiple homes."""
+        rg = _import_rg()
+        world = _make_world()
+        sim_day = _make_sim_day(world)
+        stats = _make_dispatch_stats()
+        
+        # Pushed milk: 50.0 units.
+        # Home 01 takes 20, Home 02 takes 15. Total allocated = 35.0. Unallocated = 15.0
+        orders = [
+            Order(
+                order_id="ord_test_01",
+                care_home_id="home_01",
+                store_id="store_01",
+                items=[OrderLineItem(item="milk", unit="units", offered_quantity=20.0, accepted_quantity=20.0)],
+                urgent_essential_items=[],
+                negotiation_transcript=[],
+            ),
+            Order(
+                order_id="ord_test_02",
+                care_home_id="home_02",
+                store_id="store_01",
+                items=[OrderLineItem(item="milk", unit="units", offered_quantity=15.0, accepted_quantity=15.0)],
+                urgent_essential_items=[],
+                negotiation_transcript=[],
+            )
+        ]
+        
+        # Generate full report to trigger store inventory html generation
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(rg.generate_full_report(
+                deliveries=_make_deliveries(),
+                orders=orders,
+                negotiation_results=_make_negotiation_results(),
+                dispatch_stats=stats,
+                world=world,
+                sim_day=sim_day,
+                run_id="audit-math-test"
+            ))
+        finally:
+            loop.close()
+            
+        # The math inside generate_full_report section 1 html string
+        html = result["report_html"]
+        # milk row should have Pushed Qty = 50.0, Allocated to Care Home = "Anbu Illam Home (20.0), Karuna Trust Home (15.0)"
+        # and Unallocated = 15.0
+        assert "50.0" in html
+        assert "Anbu Illam Home (20.0)" in html
+        assert "Karuna Trust Home (15.0)" in html
+        assert "15.0" in html # Unallocated
+
 
     @pytest.mark.asyncio
     async def test_map_file_created(self, tmp_path):
@@ -637,7 +757,7 @@ class TestGenerateFullReport:
         with open(report_path, "r", encoding="utf-8") as f:
             html = f.read()
             
-        assert "Surplus to Smiles" in html
+        assert "SurplusCart" in html
         assert "Store Inventory Report" in html
         assert "Care Home Allocation Summary" in html
         assert "Volunteer Availability and Dispatch Status" in html

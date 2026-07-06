@@ -40,12 +40,12 @@ import tools.logger as logger
 def _catalog() -> list[FoodCatalogItem]:
     """Minimal catalog for tests."""
     return [
-        FoodCatalogItem(name="milk",    is_perishable=True,  is_essential=True,  push_threshold_days=1, unit="units"),
-        FoodCatalogItem(name="chicken", is_perishable=True,  is_essential=True,  push_threshold_days=1, unit="kg"),
-        FoodCatalogItem(name="eggs",    is_perishable=True,  is_essential=True,  push_threshold_days=1, unit="units"),
-        FoodCatalogItem(name="rice",    is_perishable=False, is_essential=True,  push_threshold_days=7, unit="kg"),
-        FoodCatalogItem(name="sugar",   is_perishable=False, is_essential=False, push_threshold_days=7, unit="kg"),
-        FoodCatalogItem(name="curd",    is_perishable=True,  is_essential=False, push_threshold_days=1, unit="units"),
+        FoodCatalogItem(name="milk",    is_perishable=True,  is_essential=True,  push_threshold_days=1, unit="units", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="chicken", is_perishable=True,  is_essential=True,  push_threshold_days=1, unit="kg", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="eggs",    is_perishable=True,  is_essential=True,  push_threshold_days=1, unit="units", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="rice",    is_perishable=False, is_essential=True,  push_threshold_days=7, unit="kg", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="sugar",   is_perishable=False, is_essential=False, push_threshold_days=7, unit="kg", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="curd",    is_perishable=True,  is_essential=False, push_threshold_days=1, unit="units", approx_weight_kg=1.0, cap_category="test"),
     ]
 
 
@@ -391,9 +391,8 @@ class TestSingleStoreCandidate:
         assignment_stores = {asgn["store_id"] for asgn in result["assignments"]}
         assert len(assignment_stores) <= 3
         # The 4th item must be in needs_commercial, not deferred
-        nc_items = {it.item for it in result["needs_commercial"]}
-        assert len(nc_items) >= 1
-        # Nothing essential should be deferred
+        nc_items = {nc["item"].item for nc in result["needs_commercial"]}
+        assert "rice" in nc_items or "eggs" in nc_items or "chicken" in nc_items or "milk" in nc_items
         assert result["deferred"] == []
 
     def test_non_essential_flagged_urgent_silently_ignored(self):
@@ -413,6 +412,30 @@ class TestSingleStoreCandidate:
         # store_01 covers both; single assignment expected
         assert len(result["assignments"]) == 1
         assert result["needs_commercial"] == []
+
+    def test_urgent_split_across_2_stores_succeeds_in_assignments(self):
+        """
+        An urgent item needing 13 dozen eggs, where store A has 8 and store B has 5.
+        This uses 2 stores (which is <= MAX_STORES of 3), so it should split perfectly
+        into `assignments` and NOT go to `needs_commercial`.
+        """
+        sim_day = _make_sim_day({
+            "store_01": [DailyFoodItem(name="eggs", days_to_expiry=1, quantity=8.0, unit="dozen")],
+            "store_02": [DailyFoodItem(name="eggs", days_to_expiry=1, quantity=5.0, unit="dozen")],
+            "store_03": [DailyFoodItem(name="rice", days_to_expiry=5, quantity=10.0, unit="kg")],
+        })
+        ledger = StockLedger(sim_day)
+        requested = [
+            OrderLineItem(item="eggs", unit="dozen", offered_quantity=13.0, accepted_quantity=13.0),
+        ]
+        result = single_store_candidate(requested, {"eggs"}, ledger, self._cat())
+        
+        # It should succeed in assignments across the 2 stores.
+        assert len(result["assignments"]) == 2
+        assigned_stores = {a["store_id"] for a in result["assignments"]}
+        assert assigned_stores == {"store_01", "store_02"}
+        assert result["needs_commercial"] == []
+        assert result["deferred"] == []
 
 
 # ===========================================================================

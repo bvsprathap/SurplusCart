@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+os.environ["SERVED_VIA_API"] = "1"
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -104,7 +105,7 @@ async def get_root() -> str:
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Food Rescue Simulation</title>
+        <title>SurplusCart: Agentic Food Rescue</title>
         <style>
             body { background: #000517; color: #04D8D9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 20vh; margin: 0; }
             .spinner { width: 50px; height: 50px; border: 5px solid rgba(4, 216, 217, 0.3); border-radius: 50%; border-top-color: #04D8D9; animation: spin 1s ease-in-out infinite; margin: 0 auto 20px auto; }
@@ -132,7 +133,7 @@ async def get_root() -> str:
     <body>
         <div id="loading">
             <div class="spinner"></div>
-            <h1>Running Daily Simulation</h1>
+            <h1>SurplusCart: Running Daily Simulation</h1>
             <p>Agents are negotiating and dispatching orders... Please wait (~30s).</p>
         </div>
     </body>
@@ -141,17 +142,18 @@ async def get_root() -> str:
     return html_content
 
 # Global cache to prevent re-running the simulation on every refresh
+_CACHED_SUMMARY = None
 _CACHED_REPORT = None
 _CACHED_MAP = None
 _IS_RUNNING = False
 
 @app.get("/run", response_class=HTMLResponse)
-async def run_sim() -> str:
+async def run_sim(force: bool = False) -> str:
     """Run the simulation once and cache the HTML report."""
-    global _CACHED_REPORT, _CACHED_MAP, _IS_RUNNING
+    global _CACHED_SUMMARY, _CACHED_REPORT, _CACHED_MAP, _IS_RUNNING
     
-    if _CACHED_REPORT:
-        return _CACHED_REPORT
+    if _CACHED_SUMMARY and not force:
+        return _CACHED_SUMMARY
         
     if _IS_RUNNING:
         return "<h1>Simulation is currently running. Please wait a moment and refresh.</h1>"
@@ -161,17 +163,35 @@ async def run_sim() -> str:
         from main import run_simulation
         result = await run_simulation()
         
+        summary_content = result.get("summary_html")
         html_content = result.get("report_html")
         map_content = result.get("map_html", "<h1>Simulation complete. Check logs.</h1>")
         
-        if not html_content:
-            html_content = "<h1>Simulation complete.</h1><p>Check logs for details.</p>"
+        if not summary_content:
+            summary_content = "<h1>Simulation complete.</h1><p>Check logs for details.</p>"
             
+        _CACHED_SUMMARY = summary_content
         _CACHED_REPORT = html_content
         _CACHED_MAP = map_content
-        return html_content
+        return summary_content
     finally:
         _IS_RUNNING = False
+
+@app.get("/refresh", response_class=HTMLResponse)
+async def refresh_sim() -> str:
+    """Clear the cache and redirect to run a fresh simulation."""
+    global _CACHED_SUMMARY, _CACHED_REPORT, _CACHED_MAP
+    _CACHED_SUMMARY = None
+    _CACHED_REPORT = None
+    _CACHED_MAP = None
+    return "<script>window.location.href='/';</script>"
+
+@app.get("/report", response_class=HTMLResponse)
+async def get_report() -> str:
+    """Return the cached detailed report HTML."""
+    if _CACHED_REPORT:
+        return _CACHED_REPORT
+    return "<h1>Report not available.</h1><p>Please run the simulation first at <a href='/'>home</a>.</p>"
 
 @app.get("/map", response_class=HTMLResponse)
 async def get_map() -> str:

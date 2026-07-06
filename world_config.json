@@ -150,7 +150,7 @@
       "latitude": 13.0435,
       "longitude": 80.2355,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_02",
@@ -158,15 +158,15 @@
       "latitude": 13.0401,
       "longitude": 80.2318,
       "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "capacity_kg": 40.0
     },
     {
       "volunteer_id": "vol_03",
       "name": "Akash",
       "latitude": 12.9825,
       "longitude": 80.2195,
-      "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "vehicle_type": "car",
+      "capacity_kg": 250.0
     },
     {
       "volunteer_id": "vol_04",
@@ -174,7 +174,7 @@
       "latitude": 12.9802,
       "longitude": 80.2228,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 250.0
     },
     {
       "volunteer_id": "vol_05",
@@ -182,7 +182,7 @@
       "latitude": 13.0355,
       "longitude": 80.2690,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_06",
@@ -190,7 +190,7 @@
       "latitude": 13.0078,
       "longitude": 80.2218,
       "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "capacity_kg": 40.0
     },
     {
       "volunteer_id": "vol_07",
@@ -198,7 +198,7 @@
       "latitude": 13.0862,
       "longitude": 80.2088,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_08",
@@ -206,7 +206,7 @@
       "latitude": 13.0025,
       "longitude": 80.2578,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 250.0
     },
     {
       "volunteer_id": "vol_09",
@@ -214,7 +214,7 @@
       "latitude": 12.9998,
       "longitude": 80.2550,
       "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "capacity_kg": 40.0
     },
     {
       "volunteer_id": "vol_10",
@@ -222,31 +222,31 @@
       "latitude": 13.0555,
       "longitude": 80.2438,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 250.0
     },
     {
       "volunteer_id": "vol_11",
       "name": "Ishaan",
       "latitude": 13.0582,
       "longitude": 80.2410,
-      "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "vehicle_type": "car",
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_12",
       "name": "Karthik",
       "latitude": 13.0512,
       "longitude": 80.2135,
-      "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "vehicle_type": "Car",
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_13",
       "name": "Kavya",
       "latitude": 13.0388,
       "longitude": 80.1588,
-      "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "vehicle_type": "car",
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_14",
@@ -254,7 +254,7 @@
       "latitude": 13.0152,
       "longitude": 80.2518,
       "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "capacity_kg": 40.0
     },
     {
       "volunteer_id": "vol_15",
@@ -262,7 +262,7 @@
       "latitude": 13.0732,
       "longitude": 80.2609,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_16",
@@ -270,7 +270,7 @@
       "latitude": 13.0341,
       "longitude": 80.2490,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 250.0
     },
     {
       "volunteer_id": "vol_17",
@@ -278,7 +278,7 @@
       "latitude": 13.0285,
       "longitude": 80.2152,
       "vehicle_type": "two_wheeler",
-      "capacity_kg": 15.0
+      "capacity_kg": 40.0
     },
     {
       "volunteer_id": "vol_18",
@@ -286,7 +286,7 @@
       "latitude": 13.0502,
       "longitude": 80.2290,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_19",
@@ -294,7 +294,7 @@
       "latitude": 13.0203,
       "longitude": 80.2298,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 200.0
     },
     {
       "volunteer_id": "vol_20",
@@ -302,7 +302,7 @@
       "latitude": 13.0502,
       "longitude": 80.2609,
       "vehicle_type": "car",
-      "capacity_kg": 60.0
+      "capacity_kg": 200.0
     }
   ]
 }

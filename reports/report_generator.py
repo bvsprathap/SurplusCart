@@ -36,6 +36,7 @@ from tools.constraint_tools import hard_constraint_filter, single_store_candidat
 _REPORTS_DIR = Path(__file__).parent / "output"
 _NON_VEGETARIAN_ITEMS: frozenset[str] = frozenset({"chicken", "eggs"})
 
+
 def _ensure_output_dir() -> Path:
     """Create reports/output/ if it doesn't exist. Returns the directory Path."""
     _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -150,7 +151,7 @@ def get_items_summary(items: List[OrderLineItem]) -> str:
             
     sorted_items = sorted(grouped_qty.items(), key=lambda x: x[1], reverse=True)
     top_3 = sorted_items[:3]
-    summary_parts = [f"{name}: {qty:.0f} {grouped_unit[name]}" for name, qty in top_3]
+    summary_parts = [f"{name}: {qty:.1f} {grouped_unit[name]}" for name, qty in top_3]
     if len(sorted_items) > 3:
         summary_parts.append(f"+ {len(sorted_items) - 3} more")
     return ", ".join(summary_parts) if summary_parts else "—"
@@ -198,7 +199,7 @@ def generate_delivery_table(
     deliveries: List[Delivery],
     orders: List[Order],
     world: WorldConfig,
-) -> str:
+) -> tuple[str, str]:
     """
     Produce a console-ready table of all deliveries.
     """
@@ -212,21 +213,6 @@ def generate_delivery_table(
         store = sm.get(d.store_id)
         store_name = store.name if store else d.store_id
 
-        ch_names = []
-        for oid in d.order_ids:
-            order = om.get(oid)
-            if order:
-                ch = chm.get(order.care_home_id)
-                ch_names.append(ch.name if ch else order.care_home_id)
-        care_homes_str = " / ".join(ch_names) if ch_names else "—"
-
-        lines = _items_for_delivery(d, om)
-        items_str = ", ".join(
-            f"{li.item}: {li.accepted_quantity:.0f} {li.unit}"
-            for li in lines
-            if li.accepted_quantity > 0
-        ) or "—"
-
         if d.method == "volunteer" and d.volunteer_id:
             vol = vm.get(d.volunteer_id)
             method_str = f"Volunteer: {vol.name if vol else d.volunteer_id}"
@@ -235,23 +221,40 @@ def generate_delivery_table(
         else:
             method_str = "Commercial"
 
-        urgent = _urgent_in_delivery(d, om)
-        urgent_str = "★ " + ", ".join(urgent) if urgent else "—"
+        for oid in d.order_ids:
+            order = om.get(oid)
+            if not order:
+                continue
 
-        rows.append({
-            "Delivery ID": d.delivery_id[:8] + "…",
-            "Store": store_name,
-            "Care Home(s)": care_homes_str,
-            "Items": items_str,
-            "Method": method_str,
-            "Pickup": d.pickup_time or "—",
-            "Urgent": urgent_str,
-        })
+            ch = chm.get(order.care_home_id)
+            care_home_str = ch.name if ch else order.care_home_id
+
+            items_str = ", ".join(
+                f"{li.item}: {li.accepted_quantity:.1f} {li.unit}"
+                for li in order.items
+                if li.accepted_quantity > 0
+            ) or "—"
+
+            urgent_names = [
+                li.item for li in order.items 
+                if li.accepted_quantity > 0 and li.item.lower() in {u.lower() for u in order.urgent_essential_items}
+            ]
+            urgent_str = "★ " + ", ".join(urgent_names) if urgent_names else "—"
+
+            rows.append({
+                "Delivery ID": d.delivery_id[:8] + "…",
+                "Store": store_name,
+                "Care Home(s)": care_home_str,
+                "Items": items_str,
+                "Method": method_str,
+                "Pickup": d.pickup_time or "—",
+                "Urgent": urgent_str,
+            })
 
     if not rows:
         output = "(No deliveries to display)"
         print(output)
-        return output
+        return output, ""
 
     df = pd.DataFrame(rows)
     for col in ("Items", "Care Home(s)"):
@@ -261,7 +264,10 @@ def generate_delivery_table(
     table_str = df.to_string(index=False, max_colwidth=50)
     output = header + table_str + "\n" + "=" * 100 + "\n"
 
-    print(output)
+    try:
+        print(output)
+    except UnicodeEncodeError:
+        pass
     return output, df.to_html(index=False, border=0, classes='table table-striped', justify='center')
 
 
@@ -377,20 +383,32 @@ def generate_map(
     """
     m.get_root().html.add_child(folium.Element(legend_html))
 
-    report_link = "/" if os.environ.get("RUNNING_ON_CLOUD_RUN") else "latest_report.html"
-    report_btn_html = f"""
-    <a href="{report_link}" target="_blank"
-       style="position:fixed; top:20px; right:20px; z-index:1000;
-              background-color:#000517; color:#04D8D9; border:1px solid #04D8D9;
-              padding:10px 20px; font-family:'Segoe UI', Arial, sans-serif; font-size:14px;
-              font-weight:bold; text-decoration:none; border-radius:4px;
-              box-shadow: 0 0 8px rgba(4, 216, 217, 0.4); transition: all 0.3s ease;"
-       onmouseover="this.style.backgroundColor='#04D8D9'; this.style.color='#000517'; this.style.boxShadow='0 0 12px #01F3F4';"
-       onmouseout="this.style.backgroundColor='#000517'; this.style.color='#04D8D9'; this.style.boxShadow='0 0 8px rgba(4, 216, 217, 0.4)';">
-      View Report
-    </a>
+    use_api_links = os.environ.get("RUNNING_ON_CLOUD_RUN") or os.environ.get("SERVED_VIA_API")
+    summary_link = "/" if use_api_links else "latest_summary.html"
+    report_link = "/report" if use_api_links else "latest_report.html"
+    buttons_html = f"""
+    <div style="position:fixed; top:20px; right:20px; z-index:1000; display:flex; gap:10px;">
+      <a href="{summary_link}"
+         style="background-color:#000517; color:#04D8D9; border:1px solid #04D8D9;
+                padding:10px 20px; font-family:'Segoe UI', Arial, sans-serif; font-size:14px;
+                font-weight:bold; text-decoration:none; border-radius:4px;
+                box-shadow: 0 0 8px rgba(4, 216, 217, 0.4); transition: all 0.3s ease;"
+         onmouseover="this.style.backgroundColor='#04D8D9'; this.style.color='#000517'; this.style.boxShadow='0 0 12px #01F3F4';"
+         onmouseout="this.style.backgroundColor='#000517'; this.style.color='#04D8D9'; this.style.boxShadow='0 0 8px rgba(4, 216, 217, 0.4)';">
+        View Summary
+      </a>
+      <a href="{report_link}"
+         style="background-color:#000517; color:#04D8D9; border:1px solid #04D8D9;
+                padding:10px 20px; font-family:'Segoe UI', Arial, sans-serif; font-size:14px;
+                font-weight:bold; text-decoration:none; border-radius:4px;
+                box-shadow: 0 0 8px rgba(4, 216, 217, 0.4); transition: all 0.3s ease;"
+         onmouseover="this.style.backgroundColor='#04D8D9'; this.style.color='#000517'; this.style.boxShadow='0 0 12px #01F3F4';"
+         onmouseout="this.style.backgroundColor='#000517'; this.style.color='#04D8D9'; this.style.boxShadow='0 0 8px rgba(4, 216, 217, 0.4)';">
+        View Report
+      </a>
+    </div>
     """
-    m.get_root().html.add_child(folium.Element(report_btn_html))
+    m.get_root().html.add_child(folium.Element(buttons_html))
 
     map_html = m.get_root().render()
     
@@ -442,6 +460,11 @@ def generate_negotiation_report(
             parts.append("\n".join(section_lines))
             continue
 
+        if result.offer_message:
+            section_lines.append("\nOffer Sent:")
+            section_lines.append("  " + result.offer_message.replace("\n", "\n  "))
+
+
         if result.status == "rejected":
             section_lines.append(f"STATUS: ✗ REJECTED")
             section_lines.append(f"Rejection message: {result.rejection_message or '—'}")
@@ -457,7 +480,7 @@ def generate_negotiation_report(
             section_lines.append("\nItems auto-accepted:")
             for item in result.agreed_items:
                 section_lines.append(
-                    f"  • {item.item}: {item.accepted_quantity:.0f} {item.unit}"
+                    f"  • {item.item}: {item.accepted_quantity:.1f} {item.unit}"
                 )
         else:
             section_lines.append("STATUS: ✓ AGREED")
@@ -481,27 +504,35 @@ def generate_negotiation_report(
                 f"\nUrgent items flagged: ★ {', '.join(result.urgent_item_names)}"
             )
 
-        for order in orders_by_ch.get(ch_id, []):
+        ch_orders = orders_by_ch.get(ch_id, [])
+        all_arriving = []
+        all_deferred = []
+        all_messages = []
+        for order in ch_orders:
             if order.final_notice:
                 fn = order.final_notice
-                section_lines.append(f"\nFinal notice:")
                 if fn.get("arriving_today"):
-                    section_lines.append(
-                        f"  Arriving today: {', '.join(fn['arriving_today'])}"
-                    )
+                    all_arriving.extend(fn["arriving_today"])
                 if fn.get("deferred"):
-                    section_lines.append(
-                        f"  Deferred:       {', '.join(fn['deferred'])}"
-                    )
-                if fn.get("message"):
-                    section_lines.append(f"  Message: {fn['message']}")
+                    all_deferred.extend(fn["deferred"])
+                if fn.get("message") and fn["message"] not in all_messages:
+                    all_messages.append(fn["message"])
+        
+        if all_messages:
+            section_lines.append(f"\nToday's Delivery details:")
+            for msg in all_messages:
+                section_lines.append(f"  {msg}")
 
         parts.append("\n".join(section_lines))
 
     body = _DIVIDER.join(parts)
     console_output = header + "\n" + body + "\n" + "=" * 80 + "\n"
-    print(console_output)
+    try:
+        print(console_output)
+    except UnicodeEncodeError:
+        pass
     
+
     # Return HTML
     html_parts = []
     for ch_id in all_home_ids:
@@ -530,6 +561,9 @@ def generate_negotiation_report(
             <p style="font-size: 13px; margin: 5px 0;">Negotiates via A2A: {"Yes" if negotiates else "No (auto-accept)"}</p>
         """
         if result:
+            if result.offer_message:
+                html_part += f"<div style='margin-top: 10px; font-size: 13px; color: #EAFBFF; padding: 10px; border-left: 3px solid #04D8D9; background: #000517;'><b>Offer Sent:</b><br/>{result.offer_message.replace(chr(10), '<br/>')}</div>"
+
             if result.status == "rejected":
                 html_part += f"<p style='color: #01F3F4; font-weight: bold; margin: 10px 0;'>Status: ✗ REJECTED</p>"
                 html_part += f"<p style='color: #087C81; font-style: italic; margin: 5px 0;'>Rejection message: {result.rejection_message or '—'}</p>"
@@ -544,7 +578,7 @@ def generate_negotiation_report(
                     action_label = turn.action.replace("_", " ").upper()
                     if turn.item:
                         if turn.quantity is not None:
-                            detail_str = f" [{turn.item}: {turn.quantity:.0f}]"
+                            detail_str = f" [{turn.item}: {turn.quantity:.1f}]"
                         else:
                             detail_str = f" [{turn.item}]"
                     else:
@@ -556,22 +590,31 @@ def generate_negotiation_report(
                 html_part += "<table style='width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 5px; border: 1px solid rgba(4, 216, 217, 0.2);'>"
                 html_part += "<tr style='background: #087C81; color: #EAFBFF; text-align: left;'><th>Item</th><th>Offered</th><th>Agreed</th><th>Unit</th></tr>"
                 for item in result.agreed_items:
-                    html_part += f"<tr style='border-bottom: 1px solid rgba(4, 216, 217, 0.1); background: #000F2E;'><td>{item.item}</td><td>{item.offered_quantity:.0f}</td><td>{item.accepted_quantity:.0f}</td><td>{item.unit}</td></tr>"
+                    html_part += f"<tr style='border-bottom: 1px solid rgba(4, 216, 217, 0.1); background: #000F2E;'><td>{item.item}</td><td>{item.offered_quantity:.1f}</td><td>{item.accepted_quantity:.1f}</td><td>{item.unit}</td></tr>"
                 html_part += "</table>"
                 
             if result.urgent_item_names:
                 html_part += f"<p style='margin-top: 10px; font-size: 13px; color: #01F3F4;'><b>Urgent items flagged:</b> ★ {', '.join(result.urgent_item_names)}</p>"
                 
-            for order in orders_by_ch.get(ch_id, []):
+            ch_orders = orders_by_ch.get(ch_id, [])
+            all_arriving = []
+            all_deferred = []
+            all_messages = []
+            for order in ch_orders:
                 if order.final_notice:
                     fn = order.final_notice
-                    html_part += f"<div style='margin-top: 10px; font-size: 12px; color: #04D8D9; border-top: 1px dashed rgba(4, 216, 217, 0.2); padding-top: 5px;'>"
-                    html_part += f"<b>Final Notice:</b> {fn.get('message', '')}<br/>"
                     if fn.get("arriving_today"):
-                        html_part += f"&nbsp;&nbsp;&bull; Arriving today: {', '.join(fn['arriving_today'])}<br/>"
+                        all_arriving.extend(fn["arriving_today"])
                     if fn.get("deferred"):
-                        html_part += f"&nbsp;&nbsp;&bull; Deferred: {', '.join(fn['deferred'])}<br/>"
-                    html_part += "</div>"
+                        all_deferred.extend(fn["deferred"])
+                    if fn.get("message") and fn["message"] not in all_messages:
+                        all_messages.append(fn["message"])
+            
+            if all_messages:
+                html_part += f"<div style='margin-top: 10px; font-size: 12px; color: #04D8D9; border-top: 1px dashed rgba(4, 216, 217, 0.2); padding-top: 5px;'>"
+                formatted_messages = '<br/>'.join(msg.replace('\\n', '<br/>').replace('\n', '<br/>') for msg in all_messages)
+                html_part += f"<b>Today's Delivery details:</b><br/>{formatted_messages}<br/>"
+                html_part += "</div>"
         else:
             html_part += "<p style='color: #087C81; font-style: italic;'>[No negotiation result recorded for this home]</p>"
         html_part += "</div>"
@@ -588,7 +631,7 @@ def _format_turn(turn: NegotiationTurn, lines: List[str]) -> None:
     if turn.item:
         detail += f" [{turn.item}"
         if turn.quantity is not None:
-            detail += f": {turn.quantity:.0f}"
+            detail += f": {turn.quantity:.1f}"
         detail += "]"
     lines.append(f"  Turn {turn.turn_number:>2} | {speaker} | {action}{detail}")
 
@@ -674,8 +717,12 @@ def generate_audit_report(
     lines.append("\n" + "=" * 80 + "\n")
 
     output = "\n".join(lines)
-    print(output)
+    try:
+        print(output)
+    except UnicodeEncodeError:
+        pass
     
+
     # Return HTML
     html_parts = []
     html_parts.append("""
@@ -807,8 +854,373 @@ def highlight_delivery_rows(table_html: str, del_rows: List[dict]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # MAIN ENTRY POINT
 # ---------------------------------------------------------------------------
+
+def generate_summary_page(
+    deliveries: List[Delivery],
+    orders: List[Order],
+    negotiation_results: List[NegotiationResult],
+    dispatch_stats: DispatchStats,
+    world: WorldConfig,
+    sim_day: SimulationDay,
+    run_id: str
+) -> Tuple[str, str]:
+    # Math
+    catalog_map = {c.name.lower(): c for c in world.catalog}
+    food_rescued_kg = 0.0
+    for o in orders:
+        for li in o.items:
+            qty = li.accepted_quantity
+            cat = catalog_map.get(li.item.lower())
+            w = cat.approx_weight_kg if cat else 1.0
+            food_rescued_kg += qty * w
+            
+    meals_served = round(food_rescued_kg / 0.5)
+    ghg_avoided = round(food_rescued_kg * 2.5)
+    
+    served_home_ids = {o.care_home_id for d in deliveries for o_id in d.order_ids for o in orders if o.order_id == o_id}
+    homes_served_count = len(served_home_ids)
+    residents_served = 0
+    chm = _care_home_map(world)
+    for ch_id in served_home_ids:
+        ch = chm.get(ch_id)
+        if ch:
+            residents_served += ch.resident_count
+
+    # Operational KPIs
+    total_pushed_kg = 0.0
+    for store_state in sim_day.stores:
+        for item in store_state.pushed_inventory:
+            qty = item.quantity
+            cat = catalog_map.get(item.name.lower())
+            w = cat.approx_weight_kg if cat else 1.0
+            total_pushed_kg += qty * w
+            
+    waste_prevention_rate = (food_rescued_kg / total_pushed_kg * 100) if total_pushed_kg > 0 else 0.0
+    fulfilled_orders = sum(len(d.order_ids) for d in deliveries)
+    delivery_success_rate = (fulfilled_orders / len(orders) * 100) if orders else 0.0
+    
+    available_vols = sum(1 for v in sim_day.volunteers if v.available)
+    volunteer_part_str = f"{dispatch_stats.volunteer_assigned} of {available_vols}"
+    
+    urgent_flagged = sum(len(o.urgent_essential_items) for o in orders)
+    urgent_delivered = 0
+    for d in deliveries:
+        for oid in d.order_ids:
+            for o in orders:
+                if o.order_id == oid:
+                    urgent_delivered += len(o.urgent_essential_items)
+                    
+    urgent_fulfilled_str = f"{urgent_delivered} of {urgent_flagged}"
+    urgent_color = "#01F3F4" if urgent_delivered == urgent_flagged and urgent_flagged > 0 else "#EAFBFF"
+
+    # Per-Home Impact Table
+    home_rows = []
+    for ch in world.care_homes:
+        if ch.care_home_id in served_home_ids:
+            h_orders = [o for d in deliveries for oid in d.order_ids for o in orders if o.order_id == oid and o.care_home_id == ch.care_home_id]
+            h_items = 0
+            h_kg = 0.0
+            h_urgent = 0
+            for ho in h_orders:
+                for li in ho.items:
+                    h_items += li.accepted_quantity
+                    qty = li.accepted_quantity
+                    cat = catalog_map.get(li.item.lower())
+                    w = cat.approx_weight_kg if cat else 1.0
+                    h_kg += qty * w
+                h_urgent += len(ho.urgent_essential_items)
+                
+            h_methods = list({d.method.replace('_', ' ').title() for d in deliveries for oid in d.order_ids for ho in h_orders if ho.order_id == oid})
+            home_rows.append({
+                "Care Home": ch.name,
+                "Residents": ch.resident_count,
+                "Items Received": f"{h_items:.1f}",
+                "kg Received": f"{h_kg:.1f}",
+                "Meals (est.)": f"{round(h_kg/0.5)}",
+                "Urgent Items Honored": h_urgent,
+                "Delivery Method(s)": ", ".join(h_methods)
+            })
+        else:
+            home_rows.append({
+                "Care Home": ch.name,
+                "Residents": ch.resident_count,
+                "Items Received": "—",
+                "kg Received": "—",
+                "Meals (est.)": "—",
+                "Urgent Items Honored": "—",
+                "Delivery Method(s)": "Declined today"
+            })
+    
+    df_home = pd.DataFrame(home_rows)
+    table_home_html = df_home.to_html(classes="data-table", border=0, index=False, escape=False)
+    
+    # Narrative
+    narrative_parts = []
+    store_count = len({d.store_id for d in deliveries})
+    narrative_parts.append(f"Today, {food_rescued_kg:.1f} kg of surplus food from {store_count} Chennai stores reached {homes_served_count} care homes, providing an estimated {meals_served} meals to {residents_served} residents.")
+    if urgent_flagged > 0:
+        narrative_parts.append(f"All {urgent_delivered} urgent essential requests were fulfilled.")
+    
+    truck_count = dispatch_stats.store_truck_assigned
+    comm_count = dispatch_stats.commercial_assigned
+    vol_count = dispatch_stats.volunteer_assigned
+    narrative_parts.append(f"Deliveries were completed via {vol_count} volunteer trips, {truck_count} store-truck runs, and {comm_count} commercial pickups.")
+    narrative_parts.append(f"An estimated {ghg_avoided} kg of CO2e emissions were avoided by preventing this food from going to waste.")
+    narrative_html = " ".join(narrative_parts)
+
+    use_api_links = os.environ.get("RUNNING_ON_CLOUD_RUN") or os.environ.get("SERVED_VIA_API")
+    report_link = "/report" if use_api_links else "latest_report.html"
+    map_link = "/map" if use_api_links else f"map_{run_id}.html"
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SurplusCart - Daily Impact Summary</title>
+  <style>
+    body {{
+      background-color: #000517;
+      color: #EAFBFF;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }}
+    
+    header, footer {{
+      width: 100%;
+      max-width: 1600px;
+      margin: 0 auto;
+    }}
+    header img, footer img {{
+      width: 100%;
+      height: auto;
+      display: block;
+    }}
+
+    .title-block {{
+      text-align: center;
+      margin: 20px auto 40px;
+    }}
+    .title-block h1 {{
+      font-family: 'Century Gothic Bold', 'Arial Bold', sans-serif;
+      color: #04D8D9;
+      font-size: 28px;
+      margin: 0 0 10px 0;
+      text-shadow: 0 0 8px #01F3F4, 0 0 16px #04D8D9;
+    }}
+    .title-block p {{
+      font-size: 14px;
+      color: #EAFBFF;
+      margin: 0;
+    }}
+
+    .content-container {{
+      width: 90%;
+      max-width: 1200px;
+      margin: 0 auto;
+      flex-grow: 1;
+    }}
+
+    .card {{
+      background-color: #000F2E;
+      border: 1px solid rgba(4, 216, 217, 0.4);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }}
+    
+    .card h2 {{
+      font-family: 'Century Gothic Bold', 'Arial Bold', sans-serif;
+      color: #04D8D9;
+      font-size: 18px;
+      margin-top: 0;
+      margin-bottom: 20px;
+      text-shadow: 0 0 8px #01F3F4, 0 0 16px #04D8D9;
+    }}
+
+    .kpi-row {{
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 30px;
+    }}
+    .kpi-card {{
+      flex: 1;
+      background-color: #000F2E;
+      border: 1px solid rgba(4, 216, 217, 0.4);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }}
+    .kpi-value {{
+      font-family: 'Century Gothic Bold', 'Arial Bold', sans-serif;
+      color: #01F3F4;
+      font-size: 48px;
+      margin: 10px 0;
+      text-shadow: 0 0 8px rgba(1, 243, 244, 0.5);
+    }}
+    .kpi-label {{
+      font-size: 14px;
+      color: #EAFBFF;
+      font-weight: bold;
+    }}
+    .kpi-sub {{
+      font-size: 12px;
+      color: #087C81;
+      margin-top: 5px;
+    }}
+
+    .kpi-row-small .kpi-card {{
+      padding: 15px;
+    }}
+    .kpi-row-small .kpi-value {{
+      font-size: 28px;
+    }}
+
+    .data-table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: #EAFBFF;
+    }}
+    .data-table th {{
+      background-color: #087C81;
+      color: #EAFBFF;
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 600;
+    }}
+    .data-table td {{
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(4, 216, 217, 0.4);
+    }}
+    .data-table tr:nth-child(even) {{
+      background-color: #000F2E;
+    }}
+    .data-table tr:nth-child(odd) {{
+      background-color: #001433;
+    }}
+
+    .btn-container {{
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin: 40px 0;
+    }}
+    .btn-action {{
+      background-color: #04D8D9;
+      color: #000517;
+      padding: 12px 32px;
+      font-family: 'Century Gothic Bold', sans-serif;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 8px rgba(4, 216, 217, 0.4);
+    }}
+    .btn-action:hover {{
+      background-color: #01F3F4;
+      box-shadow: 0 0 12px #01F3F4;
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <img src="../assets/header.png" alt="Header Image" onerror="this.style.display='none';"/>
+  </header>
+
+  <div class="title-block">
+    <h1>SurplusCart &mdash; Daily Impact Summary</h1>
+    <p>Run ID: {run_id} | Simulated Date: Today</p>
+  </div>
+
+  <div class="content-container">
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-value">{food_rescued_kg:.1f}</div>
+        <div class="kpi-label">Food Rescued (kg)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">{meals_served}</div>
+        <div class="kpi-label">Estimated Meals Served</div>
+        <div class="kpi-sub">Est. at 0.5 kg per meal (FAO convention)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">{homes_served_count}</div>
+        <div class="kpi-label">Care Homes Served</div>
+        <div class="kpi-sub">reaching {residents_served} residents</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">{ghg_avoided}</div>
+        <div class="kpi-label">Estimated CO2e Avoided (kg)</div>
+        <div class="kpi-sub">Est. at 2.5 kg CO2e per kg food waste avoided (WRAP-derived factor)</div>
+      </div>
+    </div>
+
+    <div class="kpi-row kpi-row-small">
+      <div class="kpi-card">
+        <div class="kpi-value">{waste_prevention_rate:.1f}%</div>
+        <div class="kpi-label">Waste Prevention Rate</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">{delivery_success_rate:.1f}%</div>
+        <div class="kpi-label">Delivery Success Rate</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">{volunteer_part_str}</div>
+        <div class="kpi-label">Volunteer Participation</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value" style="color: {urgent_color};">{urgent_fulfilled_str}</div>
+        <div class="kpi-label">Urgent Items Fulfilled</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Narrative Summary</h2>
+      <p style="line-height: 1.6;">{narrative_html}</p>
+    </div>
+
+    <div class="card">
+      <h2>Per-Home Impact</h2>
+      {table_home_html}
+    </div>
+
+    <div class="btn-container">
+      <a href="{report_link}" target="_blank" class="btn-action">View Detailed Report</a>
+      <a href="{map_link}" target="_blank" class="btn-action">View Delivery Map</a>
+    </div>
+  </div>
+
+  <footer>
+    <img src="../assets/footer.png" alt="Footer Image" onerror="this.style.display='none';"/>
+  </footer>
+</body>
+</html>"""
+    summary_filepath = str(_REPORTS_DIR / f"summary_{run_id}.html")
+    latest_filepath = str(_REPORTS_DIR / "latest_summary.html")
+
+    if not os.environ.get("RUNNING_ON_CLOUD_RUN"):
+        with open(summary_filepath, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        with open(latest_filepath, "w", encoding="utf-8") as f:
+            f.write(html_content)
+            
+    return summary_filepath, html_content
 
 async def generate_full_report(
     deliveries: List[Delivery],
@@ -840,7 +1252,7 @@ async def generate_full_report(
         for li in o.items:
             if li.accepted_quantity > 0:
                 key = (o.store_id, li.item.lower())
-                alloc_map.setdefault(key, []).append(f"{ch_name} ({li.accepted_quantity:.0f})")
+                alloc_map.setdefault(key, []).append(f"{ch_name} ({li.accepted_quantity:.1f})")
 
     for store_state in sim_day.stores:
         store = sm.get(store_state.store_id)
@@ -1115,21 +1527,6 @@ async def generate_full_report(
         store = sm.get(d.store_id)
         store_name = store.name if store else d.store_id
 
-        ch_names = []
-        d_orders = []
-        for oid in d.order_ids:
-            order = om_lookup.get(oid)
-            if order:
-                d_orders.append(order)
-                ch = chm.get(order.care_home_id)
-                ch_names.append(ch.name if ch else order.care_home_id)
-        care_homes_str = ", ".join(ch_names) if ch_names else "—"
-
-        all_d_items = []
-        for o in d_orders:
-            all_d_items.extend(o.items)
-        items_summary = get_items_summary(all_d_items)
-        payload_kg = sum(li.accepted_quantity for li in all_d_items)
         method_str = d.method.replace("_", " ").title()
 
         if d.method == "volunteer" and d.volunteer_id:
@@ -1140,27 +1537,50 @@ async def generate_full_report(
         else:
             assigned_to = "Dunzo (sim)"
 
-        urgent = _urgent_in_delivery(d, om_lookup)
-        urgent_str = ", ".join(f"★ {u}" for u in urgent) if urgent else "—"
-        has_urgent = bool(urgent)
-        fallback = get_fallback_reason(d, payload_kg, has_urgent, world, sim_day)
+        for oid in d.order_ids:
+            order = om_lookup.get(oid)
+            if not order:
+                continue
+                
+            ch = chm.get(order.care_home_id)
+            care_home_str = ch.name if ch else order.care_home_id
 
-        del_rows.append({
-            "Delivery ID": d.delivery_id,
-            "Store": store_name,
-            "Care Home(s)": care_homes_str,
-            "Items Summary": items_summary,
-            "Total Payload (kg)": f"{payload_kg:.1f}",
-            "Method": method_str,
-            "Assigned To": assigned_to,
-            "Pickup Time": d.pickup_time or "Today 2:00 PM",
-            "Urgent Items": urgent_str,
-            "Fallback Reason": fallback,
-            "_method_raw": d.method
-        })
+            items_summary = get_items_summary(order.items)
+            payload_kg = sum(li.accepted_quantity for li in order.items)
+
+            urgent = _urgent_in_delivery(d, om_lookup) # d.method logic needs this? Wait, fallback needs payload_kg.
+            # actually we can keep fallback reason same for all rows of this delivery. We need the TOTAL payload for fallback logic.
+            total_payload_kg = sum(li.accepted_quantity for ord_obj in [om_lookup.get(id) for id in d.order_ids if om_lookup.get(id)] for li in ord_obj.items)
+            
+            urgent_in_del = _urgent_in_delivery(d, om_lookup)
+            fallback = get_fallback_reason(d, total_payload_kg, bool(urgent_in_del), world, sim_day)
+
+            urgent_names = [
+                li.item for li in order.items 
+                if li.accepted_quantity > 0 and li.item.lower() in {u.lower() for u in order.urgent_essential_items}
+            ]
+            urgent_str = ", ".join(f"★ {u}" for u in urgent_names) if urgent_names else "—"
+
+            del_rows.append({
+                "Delivery ID": d.delivery_id,
+                "Store": store_name,
+                "Care Home(s)": care_home_str,
+                "Items Summary": items_summary,
+                "Total Payload (kg)": f"{payload_kg:.1f}",
+                "Method": method_str,
+                "Assigned To": assigned_to,
+                "Pickup Time": d.pickup_time or "Today 2:00 PM",
+                "Urgent Items": urgent_str,
+                "Fallback Reason": fallback,
+                "_method_raw": d.method
+            })
 
     df_del = pd.DataFrame(del_rows)
-    df_del_render = df_del.drop(columns=["_method_raw"])
+    if not df_del.empty:
+        df_del_render = df_del.drop(columns=["_method_raw"])
+    else:
+        df_del_render = pd.DataFrame(columns=["Delivery ID", "Store", "Care Home(s)", "Items Summary", "Total Payload (kg)", "Method", "Assigned To", "Pickup Time", "Urgent Items", "Fallback Reason"])
+        
     table_del_html = df_del_render.to_html(classes="data-table delivery-table", border=0, index=False, escape=False)
     section_4_html = highlight_delivery_rows(table_del_html, del_rows)
 
@@ -1168,16 +1588,19 @@ async def generate_full_report(
     map_filepath, map_html = generate_map(deliveries, orders, world, run_id)
     negotiation_report = generate_negotiation_report(negotiation_results, orders, world)
     audit_report = generate_audit_report(sim_day, world, dispatch_stats)
+    summary_filepath, summary_html = generate_summary_page(deliveries, orders, negotiation_results, dispatch_stats, world, sim_day, run_id)
     message_log = get_message_log()
 
-    map_link = "/map" if os.environ.get("RUNNING_ON_CLOUD_RUN") else f"map_{run_id}.html"
+    use_api_links = os.environ.get("RUNNING_ON_CLOUD_RUN") or os.environ.get("SERVED_VIA_API")
+    map_link = "/map" if use_api_links else f"map_{run_id}.html"
+    summary_link = "/" if use_api_links else "latest_summary.html"
 
     # Create the fully styled HTML Page
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Surplus to Smiles - Daily Operations Report</title>
+  <title>SurplusCart - Daily Operations Report</title>
   <style>
     body {{
       background-color: #000517;
@@ -1313,14 +1736,17 @@ async def generate_full_report(
   </style>
 </head>
 <body>
-  <a href="{map_link}" target="_blank" class="btn-map">View Map</a>
+  <div style="position:fixed; top:20px; right:20px; z-index:1000; display:flex; gap:10px;">
+    <a href="{summary_link}" target="_blank" class="btn-top">View Summary</a>
+    <a href="{map_link}" target="_blank" class="btn-top">View Map</a>
+  </div>
   
   <header>
     <img src="../assets/header.png" alt="Header Image" onerror="this.style.display='none';"/>
   </header>
 
   <div class="title-block">
-    <h1>Surplus to Smiles &mdash; Agentic Food Distribution</h1>
+    <h1>SurplusCart &mdash; Agentic Food Rescue</h1>
     <p>Daily Operations Report | Run ID: {run_id}</p>
   </div>
 
@@ -1373,8 +1799,10 @@ async def generate_full_report(
     return {
         "report_html": html_content,
         "map_html": map_html,
+        "summary_html": summary_html,
         "report_filepath": report_filepath,
         "map_filepath": map_filepath,
+        "summary_filepath": summary_filepath,
         "delivery_table": delivery_table,
         "negotiation_report": negotiation_report,
         "audit_report": audit_report,

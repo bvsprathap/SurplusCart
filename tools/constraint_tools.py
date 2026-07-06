@@ -192,7 +192,7 @@ def single_store_candidate(
     {
         "assignments": List[{"store_id": str, "items": List[OrderLineItem]}],
         "deferred":    List[OrderLineItem],   # non-urgent items that didn't fit
-        "needs_commercial": List[OrderLineItem],  # items needing a 4th store
+        "needs_commercial": List[{"store_id": str, "item": OrderLineItem}],  # items needing a 4th store
     }
 
     Logic (strict order):
@@ -244,7 +244,7 @@ def single_store_candidate(
 
     assignments: List[dict] = []
     deferred: List[OrderLineItem] = []
-    needs_commercial: List[OrderLineItem] = []
+    needs_commercial: List[dict] = []
     used_store_ids: List[str] = []          # ordered list of stores already committed
     MAX_STORES = 3
 
@@ -267,68 +267,88 @@ def single_store_candidate(
         if it.item.lower() not in {n.lower() for n in valid_urgent}
     ]
 
-    # ── Step 3: single store for all urgent items ─────────────────────────────
-    if urgent_items:
-        winner_urgent = best_single_store(urgent_items)
-        if winner_urgent:
-            assignments.append({"store_id": winner_urgent, "items": list(urgent_items)})
-            used_store_ids.append(winner_urgent)
-        else:
-            # ── Step 4: assign urgent items individually ──────────────────────
-            # group by best store so we don't create duplicate assignments
-            per_store: Dict[str, List[OrderLineItem]] = defaultdict(list)
-            for it in urgent_items:
-                best = None
-                for sid in all_store_ids:
-                    if ledger.get_available(sid, it.item) >= it.accepted_quantity:
-                        best = sid
+    # ── Step 3: process items and respect MAX_STORES ──────────────────────────
+    def add_to_assignment(sid: str, item: OrderLineItem):
+        for asgn in assignments:
+            if asgn["store_id"] == sid:
+                asgn["items"].append(item)
+                return
+        assignments.append({"store_id": sid, "items": [item]})
+        if sid not in used_store_ids:
+            used_store_ids.append(sid)
+
+    for is_urgent, group in [(True, urgent_items), (False, non_urgent_items)]:
+        for it in group:
+            remaining = it.accepted_quantity
+            # 1. Try to fulfill from used_store_ids
+            for sid in used_store_ids:
+                avail = ledger.get_available(sid, it.item)
+                if avail > 0:
+                    take = min(remaining, avail)
+                    split_it = OrderLineItem(
+                        item=it.item, unit=it.unit,
+                        offered_quantity=it.offered_quantity, accepted_quantity=take
+                    )
+                    add_to_assignment(sid, split_it)
+                    remaining -= take
+                    if remaining <= 1e-9:
                         break
+            
+            if remaining <= 1e-9:
+                continue
 
-                if best is None:
-                    # No store has this item — goes to needs_commercial
-                    needs_commercial.append(it)
-                    continue
-
-                # ── Step 5: cap at MAX_STORES distinct stores ─────────────────
-                if best not in used_store_ids:
-                    if len(used_store_ids) >= MAX_STORES:
-                        needs_commercial.append(it)
-                        continue
-                    used_store_ids.append(best)
-
-                per_store[best].append(it)
-
-            for sid, items in per_store.items():
-                assignments.append({"store_id": sid, "items": items})
-
-    # ── Step 6: piggyback non-urgent items on already-selected stores ─────────
-    remaining_non_urgent: List[OrderLineItem] = []
-    for it in non_urgent_items:
-        placed = False
-        for sid in used_store_ids:
-            if ledger.get_available(sid, it.item) >= it.accepted_quantity:
-                # Add to that store's existing assignment
-                for asgn in assignments:
-                    if asgn["store_id"] == sid:
-                        asgn["items"].append(it)
-                        placed = True
-                        break
-                if placed:
-                    break
-        if not placed:
-            # Try any store not yet used (only if we still have room)
+            # 2. Try to fulfill from unused stores up to MAX_STORES
             for sid in all_store_ids:
-                if sid not in used_store_ids and len(used_store_ids) < MAX_STORES:
-                    if ledger.get_available(sid, it.item) >= it.accepted_quantity:
-                        used_store_ids.append(sid)
-                        assignments.append({"store_id": sid, "items": [it]})
-                        placed = True
+                if sid in used_store_ids: continue
+                
+                avail = ledger.get_available(sid, it.item)
+                if avail > 0:
+                    if len(used_store_ids) >= MAX_STORES:
+                        break # cannot use more stores for volunteers
+                    take = min(remaining, avail)
+                    split_it = OrderLineItem(
+                        item=it.item, unit=it.unit,
+                        offered_quantity=it.offered_quantity, accepted_quantity=take
+                    )
+                    add_to_assignment(sid, split_it)
+                    remaining -= take
+                    if remaining <= 1e-9:
                         break
-        if not placed:
-            remaining_non_urgent.append(it)
+                        
+            if remaining <= 1e-9:
+                continue
 
-    # ── Step 7: deferred ──────────────────────────────────────────────────────
-    deferred = remaining_non_urgent
+            # 3. Unfulfilled remainder
+            if is_urgent:
+                # Urgent: Must fulfill via commercial, can use ANY store with stock
+                for sid in all_store_ids:
+                    if sid in used_store_ids: continue # Already took everything we could
+                    avail = ledger.get_available(sid, it.item)
+                    if avail > 0:
+                        take = min(remaining, avail)
+                        split_nc = OrderLineItem(
+                            item=it.item, unit=it.unit,
+                            offered_quantity=it.offered_quantity, accepted_quantity=take
+                        )
+                        needs_commercial.append({"store_id": sid, "item": split_nc})
+                        remaining -= take
+                        if remaining <= 1e-9:
+                            break
+                            
+                # If STILL remaining, fallback to unknown
+                if remaining > 1e-9:
+                    split_nc = OrderLineItem(
+                        item=it.item, unit=it.unit,
+                        offered_quantity=it.offered_quantity, accepted_quantity=remaining
+                    )
+                    needs_commercial.append({"store_id": "unknown", "item": split_nc})
+            else:
+                # Non-urgent: Unfulfilled remainder is deferred
+                split_def = OrderLineItem(
+                    item=it.item, unit=it.unit,
+                    offered_quantity=it.offered_quantity, accepted_quantity=remaining
+                )
+                deferred.append(split_def)
 
     return {
         "assignments": assignments,

@@ -47,8 +47,9 @@ from __future__ import annotations
 import logging
 import uuid
 from typing import Callable, Awaitable, Dict, List, Optional, Tuple
+from collections import defaultdict
 
-from data.data_model import CareHome, SimulationDay, Store, Volunteer, WorldConfig
+from data.data_model import CareHome, FoodCatalogItem, SimulationDay, Store, Volunteer, WorldConfig
 from tools.guardrails import COMMERCIAL_CAPACITY_SENTINEL, DispatchOutput
 from tools.logger import log_message
 from tools.models import Delivery, DispatchStats, Order, OrderLineItem
@@ -76,7 +77,7 @@ TruckAvailCallable = Callable[[str], Awaitable[Dict]]
 
 async def run_dispatch(
     orders: List[Order],
-    needs_commercial_items: List[OrderLineItem],
+    needs_commercial_items: List[dict],
     world: WorldConfig,
     sim_day: SimulationDay,
     get_volunteer_avail: VolunteerAvailCallable,
@@ -92,7 +93,7 @@ async def run_dispatch(
     orders              : List of Order objects created by Phase 2 orchestration.
                           Each Order already has store_id, items, urgent_essential_items.
     needs_commercial_items : Items from single_store_candidate that required a 4th
-                             store — route directly to commercial Delivery.
+                             distinct store. Now structured as List[{"store_id": str, "order_id": str, "item": OrderLineItem}] — route directly to commercial Delivery.
     world               : WorldConfig for Store/Volunteer lookup.
     sim_day             : SimulationDay (read-only — not mutated here).
     get_volunteer_avail : Async callable wrapping get_volunteer_schedule MCP tool.
@@ -111,21 +112,45 @@ async def run_dispatch(
     store_map: Dict[str, Store] = {s.store_id: s for s in world.stores}
     care_home_map: Dict[str, CareHome] = {ch.care_home_id: ch for ch in world.care_homes}
     volunteer_map: Dict[str, Volunteer] = {v.volunteer_id: v for v in world.volunteers}
+    catalog_map: Dict[str, FoodCatalogItem] = {c.name.lower(): c for c in world.catalog}
 
     # -- Step 0a: Handle needs_commercial items directly (skip steps 1–4) -----
     if needs_commercial_items:
-        commercial_delivery = await _make_commercial_delivery(
-            items=needs_commercial_items,
-            store_id=None,
-            order_ids=[],
-            world=world,
-            care_home_map=care_home_map,
-            store_map=store_map,
-            stats=stats,
-            label="needs_commercial overflow",
-        )
-        if commercial_delivery:
-            deliveries.append(commercial_delivery)
+        # Group by care_home_id to combine into one commercial delivery per care home
+        order_ch_map = {o.order_id: o.care_home_id for o in orders}
+        commercial_by_ch = defaultdict(list)
+        orders_by_ch = defaultdict(set)
+        stores_by_ch = defaultdict(set)
+
+        for nc in needs_commercial_items:
+            ch_id = order_ch_map.get(nc["order_id"])
+            if not ch_id:
+                ch_id = "unknown_ch"
+            commercial_by_ch[ch_id].append(nc["item"])
+            orders_by_ch[ch_id].add(nc["order_id"])
+            stores_by_ch[ch_id].add(nc["store_id"])
+
+        for ch_id, items in commercial_by_ch.items():
+            store_names = []
+            for sid in stores_by_ch[ch_id]:
+                s = store_map.get(sid)
+                store_names.append(s.name if s else sid)
+            
+            combined_store_id = ", ".join(sorted(store_names))
+
+            commercial_delivery = await _make_commercial_delivery(
+                items=items,
+                store_id=combined_store_id,
+                order_ids=list(orders_by_ch[ch_id]),
+                world=world,
+                care_home_map=care_home_map,
+                store_map=store_map,
+                catalog_map=catalog_map,
+                stats=stats,
+                label="needs_commercial overflow",
+            )
+            if commercial_delivery:
+                deliveries.append(commercial_delivery)
 
     # -- Step 0b: Sort available volunteers by proximity to each store --------
     # Pre-fetch availability for all volunteers (single pass)
@@ -144,7 +169,9 @@ async def run_dispatch(
     stats.volunteers_unavailable = unavailable_count
 
     # -- Step 0c: Group Orders by store_id, max 2 per Delivery ----------------
-    grouped = _group_orders_by_store(orders)  # {store_id: [Order, ...]}
+    commercial_order_ids = {nc["order_id"] for nc in needs_commercial_items} if needs_commercial_items else set()
+    standard_orders = [o for o in orders if o.order_id not in commercial_order_ids]
+    grouped = _group_orders_by_store(standard_orders)  # {store_id: [Order, ...]}
 
     # -- Step 1–5: Assign delivery method per Delivery group ------------------
     for store_id, store_orders in grouped.items():
@@ -158,7 +185,7 @@ async def run_dispatch(
 
         for batch_idx, batch in enumerate(batches):
             order_ids = [o.order_id for o in batch]
-            payload_kg = _total_payload_kg(batch)
+            payload_kg = _total_payload_kg(batch, catalog_map)
             has_urgent = _has_urgent_items(batch)
 
             delivery = await _assign_delivery(
@@ -170,6 +197,7 @@ async def run_dispatch(
                 available_volunteers=available_volunteers,
                 care_home_map=care_home_map,
                 store_map=store_map,
+                catalog_map=catalog_map,
                 get_distance_minutes=get_distance_minutes,
                 get_truck_avail=get_truck_avail,
                 stats=stats,
@@ -205,12 +233,14 @@ def _batch_orders(orders: List[Order], max_per_batch: int = 2) -> List[List[Orde
     return [orders[i:i + max_per_batch] for i in range(0, len(orders), max_per_batch)]
 
 
-def _total_payload_kg(batch: List[Order]) -> float:
+def _total_payload_kg(batch: List[Order], catalog_map: Dict[str, FoodCatalogItem]) -> float:
     """Sum all accepted_quantities across all orders in a batch (kg approximation)."""
     total = 0.0
     for order in batch:
         for line in order.items:
-            total += line.accepted_quantity
+            cat = catalog_map.get(line.item.lower())
+            w = cat.approx_weight_kg if cat else 1.0
+            total += line.accepted_quantity * w
     return total
 
 
@@ -232,6 +262,7 @@ async def _assign_delivery(
     available_volunteers: List[Volunteer],
     care_home_map: Dict[str, CareHome],
     store_map: Dict[str, Store],
+    catalog_map: Dict[str, FoodCatalogItem],
     get_distance_minutes: DistanceCallable,
     get_truck_avail: TruckAvailCallable,
     stats: DispatchStats,
@@ -282,6 +313,7 @@ async def _assign_delivery(
         world=None,
         care_home_map=care_home_map,
         store_map=store_map,
+        catalog_map=catalog_map,
         stats=stats,
         label=f"fallback for store {store.store_id}",
         has_urgent=has_urgent,
@@ -556,6 +588,7 @@ async def _make_commercial_delivery(
     world: Optional[WorldConfig],
     care_home_map: Dict[str, CareHome],
     store_map: Dict[str, Store],
+    catalog_map: Dict[str, FoodCatalogItem],
     stats: DispatchStats,
     label: str = "commercial",
     has_urgent: bool = False,
@@ -576,7 +609,12 @@ async def _make_commercial_delivery(
         volunteer_id=None,
         pickup_time=_PICKUP_TIME,
     )
-    payload_kg = sum(it.accepted_quantity for it in items)
+    
+    payload_kg = 0.0
+    for it in items:
+        cat = catalog_map.get(it.item.lower())
+        w = cat.approx_weight_kg if cat else 1.0
+        payload_kg += it.accepted_quantity * w
 
     try:
         DispatchOutput(

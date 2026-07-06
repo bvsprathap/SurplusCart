@@ -368,6 +368,7 @@ async def run_simulation() -> dict:
                     status="agreed",
                     agreed_items=agreed_items,
                     urgent_item_names=[],
+                    offer_message=offer.offer_message,
                     negotiation_transcript=[
                         NegotiationTurn(
                             turn_number=1,
@@ -436,43 +437,109 @@ async def run_simulation() -> dict:
                 )
                 care_home_orders.append(order)
 
+            # Group needs_commercial by store to create Orders
+            commercial_by_store = defaultdict(list)
+            for nc in needs_commercial:
+                commercial_by_store[nc["store_id"]].append(nc["item"])
+            
+            for store_id, items in commercial_by_store.items():
+                if store_id != "unknown":
+                    for line_item in items:
+                        ledger.deduct(store_id, line_item.item, line_item.accepted_quantity)
+                
+                assignment_item_names = {li.item.lower() for li in items}
+                urgent_essential = [
+                    item_name for item_name in negotiation_result.urgent_item_names
+                    if item_name.lower() in assignment_item_names
+                ]
+                order = Order(
+                    order_id=str(uuid4()),
+                    care_home_id=care_home.care_home_id,
+                    store_id=store_id,
+                    items=items,
+                    urgent_essential_items=urgent_essential,
+                    negotiation_transcript=negotiation_result.negotiation_transcript,
+                    final_notice={},
+                )
+                care_home_orders.append(order)
+                # Ensure we pass the updated info to dispatch
+                for it in items:
+                    all_needs_commercial.append({"store_id": store_id, "order_id": order.order_id, "item": it})
+
             # Step k: Construct final_notice
-            arriving_today = []
+            arriving_map = {}
             for order in care_home_orders:
                 for li in order.items:
                     if li.accepted_quantity > 0:
-                        arriving_today.append(li.item)
+                        name = li.item
+                        if name not in arriving_map:
+                            arriving_map[name] = [0.0, li.unit]
+                        arriving_map[name][0] += li.accepted_quantity
+            
+            deferred_map = {}
+            for li in deferred:
+                if li.accepted_quantity > 0:
+                    name = li.item
+                    if name not in deferred_map:
+                        deferred_map[name] = [0.0, li.unit]
+                    deferred_map[name][0] += li.accepted_quantity
+                    
+            commercial_map = {}
+            for nc in needs_commercial:
+                li = nc["item"]
+                if li.accepted_quantity > 0:
+                    name = li.item
+                    if name not in commercial_map:
+                        commercial_map[name] = [0.0, li.unit]
+                    commercial_map[name][0] += li.accepted_quantity
 
-            deferred_names = [li.item for li in deferred]
-            commercial_names = [li.item for li in needs_commercial]
+            # Remove commercial from arriving (since they were added to orders in step j)
+            for name, (qty, unit) in commercial_map.items():
+                if name in arriving_map:
+                    arriving_map[name][0] -= qty
+                    if arriving_map[name][0] <= 1e-9:
+                        del arriving_map[name]
 
-            # Build message
+            # Build message strings
+            def format_item_list(item_map) -> str:
+                parts = []
+                for name in sorted(item_map.keys()):
+                    qty, unit = item_map[name]
+                    parts.append(f"{qty:.1f} {unit} {name}")
+                return ", ".join(parts)
+
             shortfall_parts = []
-            if deferred_names:
-                shortfall_parts.append(
-                    f"{', '.join(deferred_names)} (deferred to a future run)"
-                )
-            if commercial_names:
-                shortfall_parts.append(
-                    f"{', '.join(commercial_names)} (requires commercial sourcing)"
-                )
+            if deferred_map:
+                shortfall_parts.append(f"{format_item_list(deferred_map)} (deferred to a future run)")
+
+            arriving_msg = ""
+            if arriving_map:
+                arriving_msg = format_item_list(arriving_map)
+            
+            if commercial_map:
+                comm_str = format_item_list(commercial_map)
+                if arriving_msg:
+                    arriving_msg += f", and {comm_str} will be delivered via commercial pickup today"
+                else:
+                    arriving_msg = f"{comm_str} will be delivered via commercial pickup today"
 
             if shortfall_parts:
                 notice_message = (
-                    f"We have arranged delivery of {', '.join(arriving_today)} for you today. "
+                    f"We have arranged delivery of {arriving_msg} for you today.\n"
                     f"Unfortunately {' and '.join(shortfall_parts)} could not be included this time "
                     f"- we apologise for the inconvenience and will try again soon."
                 )
             else:
                 notice_message = (
-                    f"Great news! We have arranged delivery of {', '.join(arriving_today)} "
+                    f"Great news! We have arranged delivery of {arriving_msg} "
                     f"for you today. Everything you accepted is on its way."
                 )
 
+            # Note: For reports, we still append commercial items back to arriving_today array 
+            # so they show up under "Arriving today:" bullets in the summary
             final_notice = {
-                "arriving_today": arriving_today,
-                "deferred": deferred_names,
-                "needs_commercial": commercial_names,
+                "arriving_today": list(arriving_map.keys()) + list(commercial_map.keys()),
+                "deferred": list(deferred_map.keys()),
                 "message": notice_message,
             }
 
@@ -481,9 +548,6 @@ async def run_simulation() -> dict:
                 order.final_notice = final_notice
 
             all_orders.extend(care_home_orders)
-
-            # Step l: Collect needs_commercial items
-            all_needs_commercial.extend(needs_commercial)
 
             print(f"  [2] Created {len(care_home_orders)} order(s) for {care_home.name}")
 

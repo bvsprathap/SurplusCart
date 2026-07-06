@@ -292,6 +292,7 @@ async def run_negotiation(
             urgent_item_names=[],
             negotiation_transcript=result["transcript"],
             rejection_message=_REJECTION_MESSAGE,
+            offer_message=offer.offer_message,
         )
 
     # ── Round 2: Re-offer if request_item was fulfilled ──────────────────────
@@ -385,6 +386,7 @@ async def run_negotiation(
         urgent_item_names=urgent_sorted,
         negotiation_transcript=result["transcript"],
         rejection_message=None,
+        offer_message=offer.offer_message,
     )
 
 

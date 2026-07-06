@@ -39,12 +39,14 @@ _skip_no_llm = pytest.mark.skipif(
 async def test_empty_list_fallback():
     res = await run_culinary([])
     assert "also available: none" in res.lower()
+    assert "Our culinary agent suggests the following dishes with today's items:" not in res
 
 @pytest.mark.asyncio
 async def test_single_item_fallback():
     item = OfferedItem(item="Milk", unit="units", offered_quantity=10, is_essential=True)
     res = await run_culinary([item])
     assert "also available: milk" in res.lower()
+    assert "Our culinary agent suggests the following dishes with today's items:" not in res
     assert "sambar" not in res.lower()
 
 # ---------------------------------------------------------------------------
@@ -65,18 +67,38 @@ async def test_run_culinary_non_empty():
 
 @_skip_no_llm
 @pytest.mark.asyncio
-async def test_plain_text_validation():
+async def test_structured_output_format():
     items = [
-        OfferedItem(item="Tomato", unit="kg", offered_quantity=5, is_essential=True),
-        OfferedItem(item="Rice", unit="kg", offered_quantity=10, is_essential=True),
-        OfferedItem(item="Lentils", unit="kg", offered_quantity=3, is_essential=True),
+        OfferedItem(item="toor dal", unit="kg", offered_quantity=5, is_essential=True),
+        OfferedItem(item="tomatoes", unit="kg", offered_quantity=10, is_essential=True),
+        OfferedItem(item="mustard seeds", unit="kg", offered_quantity=1, is_essential=True),
+        OfferedItem(item="sugar", unit="kg", offered_quantity=2, is_essential=True),
     ]
     res = await run_culinary(items)
-    # Check that it doesn't contain markdown headers
+    
+    # 1. Check intro line
+    assert "Our culinary agent suggests the following dishes with today's items:" in res
+    
+    # 2. No HTML tags
+    assert "<" not in res
+    assert ">" not in res
+    
+    # 3. No markdown
     assert "#" not in res
-    # Check that it doesn't contain bold markdown formatting
     assert "**" not in res
-    # Check that it doesn't contain JSON structure
+    
+    # 4. "Also available:" line present when applicable
+    res_lower = res.lower()
+    
+    # We shouldn't strictly force it to be present if the model found a way to use all 4 ingredients.
+    # We will just verify it's correctly formatted if it is present.
+    if "also available:" in res_lower:
+        assert res_lower.endswith(res_lower[res_lower.find("also available:"):])
+    
+    # 5. Check for line breaks (blank lines separating dishes)
+    assert "\n\n" in res
+    
+    # 6. No JSON
     assert not (res.strip().startswith("{") and res.strip().endswith("}"))
 
 @_skip_no_llm

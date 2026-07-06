@@ -113,7 +113,8 @@ Mention the cap and reason briefly in your rationale.
 3. **Right-sizing**: Scale quantities to the care home's size. \
 A home with 30 residents needs less than one with 60. Never \
 offer more than storage_capacity_kg allows in total weight. \
-Use 1 kg ≈ 1 unit as a rough weight approximation.
+Calculate total weight by multiplying each item's offered quantity \
+by its approx_weight_kg.
 
 4. **Children priority**: If has_young_children is true, \
 prioritise milk and eggs even if other items have lower expiry. \
@@ -239,9 +240,11 @@ def _build_user_message(
     for item in eligible_items:
         cat = catalog_map.get(item.name.lower())
         is_essential = cat.is_essential if cat else False
+        w = cat.approx_weight_kg if cat else 1.0
         qty = cross_store_totals.get(item.name.lower(), item.quantity)
         lines.append(
             f"- {item.name}: {qty:.1f} {item.unit}, "
+            f"approx_weight_kg={w:.2f}, "
             f"expires in {item.days_to_expiry} day(s), "
             f"essential={is_essential}"
         )
@@ -496,11 +499,12 @@ async def run_matchmaker(
             care_home.care_home_id,
         )
         return offer
-    except Exception as first_error:
+    except Exception as e:
+        first_error_msg = str(e)
         logger.warning(
             "Offer for %s failed validation: %s — retrying",
             care_home.care_home_id,
-            first_error,
+            first_error_msg,
         )
 
     # --- ONE retry with error feedback ---
@@ -509,7 +513,7 @@ async def run_matchmaker(
         parts=[types.Part.from_text(
             text=(
                 f"Your offer FAILED validation with this error:\n"
-                f"{first_error}\n\n"
+                f"{first_error_msg}\n\n"
                 f"Please fix the issues and resubmit the corrected "
                 f"JSON offer. Remember: all quantities must be > 0 "
                 f"and must not exceed available stock."

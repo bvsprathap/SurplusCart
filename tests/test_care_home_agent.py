@@ -91,12 +91,12 @@ def _make_offer(
 
 def _catalog() -> List[FoodCatalogItem]:
     return [
-        FoodCatalogItem(name="milk", is_perishable=True, is_essential=True, push_threshold_days=1, unit="units"),
-        FoodCatalogItem(name="rice", is_perishable=False, is_essential=True, push_threshold_days=7, unit="kg"),
-        FoodCatalogItem(name="sugar", is_perishable=False, is_essential=False, push_threshold_days=14, unit="kg"),
-        FoodCatalogItem(name="lentils", is_perishable=False, is_essential=True, push_threshold_days=7, unit="kg"),
-        FoodCatalogItem(name="chicken", is_perishable=True, is_essential=False, push_threshold_days=1, unit="kg"),
-        FoodCatalogItem(name="eggs", is_perishable=True, is_essential=True, push_threshold_days=2, unit="units"),
+        FoodCatalogItem(name="milk", is_perishable=True, is_essential=True, push_threshold_days=1, unit="units", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="rice", is_perishable=False, is_essential=True, push_threshold_days=7, unit="kg", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="sugar", is_perishable=False, is_essential=False, push_threshold_days=14, unit="kg", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="lentils", is_perishable=False, is_essential=True, push_threshold_days=7, unit="kg", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="chicken", is_perishable=True, is_essential=False, push_threshold_days=1, unit="kg", approx_weight_kg=1.0, cap_category="test"),
+        FoodCatalogItem(name="eggs", is_perishable=True, is_essential=True, push_threshold_days=2, unit="units", approx_weight_kg=1.0, cap_category="test"),
     ]
 
 

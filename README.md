@@ -1,4 +1,4 @@
-# Surplus to Smiles — Agentic Food Distribution
+# SurplusCart: Agentic Food Rescue
 
 **A multi-agent AI system that rescues near-expiry food from
 Chennai supermarkets and routes it to registered Care Homes
@@ -13,7 +13,7 @@ Publicly accessible — no login required. Triggers a full
 simulated day run and displays the operations report and map.
 
 ## Project Overview
-Surplus to Smiles demonstrates an end-to-end agentic food
+SurplusCart demonstrates an end-to-end agentic food
 rescue pipeline for Chennai, India. The system:
 - Collects near-expiry surplus food from 5 supermarkets via MCP
 - Matches surplus to 5 registered Care Homes using AI reasoning

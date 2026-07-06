@@ -24,7 +24,7 @@ async def run_simulation_tool() -> dict:
 root_agent = Agent(
     name="food_rescue_agent",
     model="gemini-2.5-flash",
-    description="Surplus to Smiles — Agentic Food Distribution System",
+    description="SurplusCart: Agentic Food Rescue System",
     instruction="""
     You are the Food to Go orchestrator agent for Chennai.
     When triggered, you run a complete food rescue simulation for

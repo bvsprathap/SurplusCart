@@ -64,11 +64,11 @@ from tools.constraint_tools import StockLedger
 def _make_catalog() -> List[FoodCatalogItem]:
     return [
         FoodCatalogItem(name="rice", is_perishable=False, is_essential=True,
-                        push_threshold_days=7, unit="kg"),
+                        push_threshold_days=7, unit="kg", approx_weight_kg=1.0, cap_category="test"),
         FoodCatalogItem(name="milk", is_perishable=True, is_essential=True,
-                        push_threshold_days=2, unit="units"),
+                        push_threshold_days=2, unit="units", approx_weight_kg=1.0, cap_category="test"),
         FoodCatalogItem(name="sugar", is_perishable=False, is_essential=False,
-                        push_threshold_days=10, unit="kg"),
+                        push_threshold_days=10, unit="kg", approx_weight_kg=1.0, cap_category="test"),
     ]
 
 
@@ -651,6 +651,7 @@ async def test_final_notice_populated_on_orders():
 
 
 @pytest.mark.asyncio
+
 async def test_needs_commercial_passed_to_dispatch():
     """Test 8: needs_commercial items passed correctly to run_dispatch."""
     _, mocks = await _run_orchestrator_with_mocks()

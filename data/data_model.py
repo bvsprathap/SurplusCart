@@ -14,6 +14,8 @@ class FoodCatalogItem(BaseModel):
     is_essential: bool
     push_threshold_days: int
     unit: str
+    approx_weight_kg: float
+    cap_category: str
 
 class Store(BaseModel):
     store_id: str
@@ -154,10 +156,30 @@ def generate_daily_data(world: WorldConfig) -> SimulationDay:
         
         for catalog_item in world.catalog:
             # Generate quantity
-            if catalog_item.unit == "kg":
-                quantity = round(random.uniform(5.0, 100.0), 1)
+            cat = catalog_item.cap_category
+            if cat in ("pulses", "poultry", "dairy"):
+                qty = random.uniform(0, 50)
+            elif cat == "small_veg":
+                qty = random.uniform(0, 5)
+            elif cat == "poultry_eggs":
+                qty = random.uniform(0, 10)
+            elif cat == "spices":
+                qty = random.uniform(0, 2)
+            elif cat == "staples":
+                qty = random.uniform(0, 30)
+            elif cat == "bread":
+                kg_qty = random.uniform(0, 20)
+                qty = kg_qty / catalog_item.approx_weight_kg
+            elif cat == "vegetables":
+                kg_qty = random.uniform(0, 15)
+                qty = kg_qty / catalog_item.approx_weight_kg
             else:
-                quantity = float(random.randint(10, 200))
+                qty = random.uniform(0, 50)
+                
+            if catalog_item.unit.lower() not in ("kg", "liter", "liters"):
+                quantity = float(round(qty))
+            else:
+                quantity = float(round(qty))
                 
             # Generate days to expiry
             if catalog_item.is_perishable:
