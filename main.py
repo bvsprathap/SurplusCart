@@ -74,7 +74,7 @@ if not os.path.exists(PYTHON_EXE):
         PYTHON_EXE = sys.executable
 
 SERVER_MODULE = os.path.join(PROJECT_ROOT, "mcp_servers", "store_volunteer_server.py")
-MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +178,26 @@ async def run_simulation() -> dict:
 
         # Step 6b: Maps MCP server (subprocess)
         print(f"  [SETUP] Starting Maps MCP server...")
+        
+        # Validation safeguard for GOOGLE_MAPS_API_KEY
+        if not MAPS_API_KEY:
+            raise ValueError("GOOGLE_MAPS_API_KEY is empty or missing.")
+        if "\n" in MAPS_API_KEY or "\r" in MAPS_API_KEY:
+            raise ValueError(
+                "GOOGLE_MAPS_API_KEY contains newline characters. "
+                "Check Secret Manager value contains only the key, not the full .env file"
+            )
+        if "#" in MAPS_API_KEY:
+            raise ValueError(
+                "GOOGLE_MAPS_API_KEY contains '#' characters. "
+                "Check Secret Manager value contains only the key, not the full .env file"
+            )
+        if len(MAPS_API_KEY) < 30 or len(MAPS_API_KEY) > 45:
+            raise ValueError(
+                f"GOOGLE_MAPS_API_KEY appears malformed (length: {len(MAPS_API_KEY)}). "
+                "Check Secret Manager value contains only the key, not the full .env file"
+            )
+
         maps_env = {
             **os.environ,
             "GOOGLE_MAPS_API_KEY": MAPS_API_KEY,
@@ -223,6 +243,23 @@ async def run_simulation() -> dict:
             data = _extract_structured(result)
             seconds = data["durations"][0][0]["value"]
             return float(seconds) / 60.0
+
+        async def get_directions_polyline(origin_str: str, dest_str: str, waypoints: list[str]) -> str | None:
+            result = await maps_tool_map["maps_directions"].run_async(
+                args={
+                    "origin": origin_str,
+                    "destination": dest_str,
+                    "waypoints": waypoints
+                },
+                tool_context=None,
+            )
+            data = _extract_structured(result)
+            if "routes" in data and len(data["routes"]) > 0:
+                try:
+                    return data["routes"][0]["polyline"]["encodedPolyline"]
+                except KeyError:
+                    pass
+            return None
 
         async def get_truck_avail(store_id: str) -> dict:
             result = await store_tool_map["check_vehicle_availability"].run_async(
@@ -642,6 +679,7 @@ async def run_simulation() -> dict:
             sim_day=sim_day,
             get_volunteer_avail=get_volunteer_avail,
             get_distance_minutes=get_distance_minutes,
+            get_directions_polyline=get_directions_polyline,
             get_truck_avail=get_truck_avail,
             run_id=run_id,
         )

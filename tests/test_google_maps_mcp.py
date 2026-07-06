@@ -40,7 +40,7 @@ STORE_01 = "13.0418,80.2341"   # Sri Balaji Supermarket, T. Nagar
 HOME_01  = "13.0012,80.2565"   # Anbu Illam Home, Adyar
 HOME_05  = "13.0139,80.2530"   # Sneha Care Home, Kotturpuram
 
-MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
 
 
 def extract(r):

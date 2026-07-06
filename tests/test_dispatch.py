@@ -182,6 +182,11 @@ def _truck_mock(available: bool = True, capacity_kg: float = 3000.0) -> AsyncMoc
     return AsyncMock(return_value={"available": available, "capacity_kg": capacity_kg})
 
 
+def _polyline_mock() -> AsyncMock:
+    """Mock get_directions_polyline."""
+    return AsyncMock(return_value="encoded_polyline_string")
+
+
 # ---------------------------------------------------------------------------
 # Unit tests: helper functions
 # ---------------------------------------------------------------------------
@@ -365,6 +370,7 @@ class TestHappyPath:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=True),
             get_distance_minutes=_distance_mock(minutes=10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(),
             run_id="test-run",
         )
@@ -388,6 +394,7 @@ class TestHappyPath:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(),
             get_distance_minutes=_distance_mock(),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(),
             run_id="test-run",
         )
@@ -413,6 +420,7 @@ class TestCapacityCheck:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=True),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True, capacity_kg=3000.0),
             run_id="test-run",
         )
@@ -450,6 +458,7 @@ class TestCapacityCheck:
             sim_day=sim_day,
             get_volunteer_avail=avail_fn,
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(),
             run_id="test-run",
         )
@@ -474,6 +483,7 @@ class TestTimeBudget:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=True),
             get_distance_minutes=_distance_mock(minutes=70.0),  # 70+70 = 140 > 120
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True, capacity_kg=3000.0),
             run_id="test-run",
         )
@@ -497,6 +507,7 @@ class TestStoreTruckFallback:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=False),  # no volunteers
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True, capacity_kg=3000.0),
             run_id="test-run",
         )
@@ -520,6 +531,7 @@ class TestCommercialFallback:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=False),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=False),
             run_id="test-run",
         )
@@ -553,6 +565,7 @@ class TestCommercialFallback:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=True),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True),
             run_id="test-run",
         )
@@ -576,6 +589,7 @@ class TestUrgentItemGuarantee:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=False),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True, capacity_kg=3000.0),
             run_id="test-run",
         )
@@ -597,6 +611,7 @@ class TestUrgentItemGuarantee:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=False),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=False),
             run_id="test-run",
         )
@@ -642,6 +657,7 @@ class TestDispatchStats:
             sim_day=sim_day,
             get_volunteer_avail=avail_fn,
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True),
             run_id="multi-test",
         )
@@ -673,6 +689,7 @@ class TestDispatchStats:
             sim_day=sim_day,
             get_volunteer_avail=avail_fn,
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True),
             run_id="test-run",
         )
@@ -695,6 +712,7 @@ class TestConfirmationMessages:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=True),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(),
             run_id="test-run",
         )
@@ -719,6 +737,7 @@ class TestConfirmationMessages:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=True),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(),
             run_id="test-run",
         )
@@ -742,6 +761,7 @@ class TestConfirmationMessages:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=False),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=True, capacity_kg=3000.0),
             run_id="test-run",
         )
@@ -763,6 +783,7 @@ class TestConfirmationMessages:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=False),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(available=False),
             run_id="test-run",
         )
@@ -805,6 +826,7 @@ class TestGuardrailFailureFallthrough:
             sim_day=sim_day,
             get_volunteer_avail=avail_fn,
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(),
             run_id="test-run",
         )
@@ -835,6 +857,7 @@ class TestGuardrailFailureFallthrough:
             sim_day=sim_day,
             get_volunteer_avail=_avail_mock(available=True),
             get_distance_minutes=_distance_mock(10.0),
+            get_directions_polyline=_polyline_mock(),
             get_truck_avail=_truck_mock(),
             run_id="test-run",
         )

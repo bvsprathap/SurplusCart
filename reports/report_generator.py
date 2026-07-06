@@ -14,8 +14,10 @@ from typing import Dict, List, Optional, Tuple, Set, Any
 import uuid
 
 import folium
+import folium.plugins
 import pandas as pd
 from PIL import Image
+import polyline
 
 from data.data_model import CareHome, SimulationDay, Store, Volunteer, WorldConfig, DailyFoodItem, FoodCatalogItem
 from tools.logger import get_message_log
@@ -300,7 +302,7 @@ def generate_map(
     vm = _volunteer_map(world)
     om = _order_map(orders)
 
-    m = folium.Map(location=_CHENNAI_CENTER, zoom_start=12, tiles="CartoDB positron")
+    m = folium.Map(location=[13.03, 80.245], zoom_start=12, tiles="CartoDB positron")
 
     for store in world.stores:
         folium.Marker(
@@ -318,24 +320,36 @@ def generate_map(
             icon=folium.Icon(color="green", icon="home", prefix="fa"),
         ).add_to(m)
 
+    assigned_vols = {d.volunteer_id for d in deliveries if d.method == "volunteer" and d.volunteer_id}
+
     for vol in world.volunteers:
+        is_assigned = vol.volunteer_id in assigned_vols
+        
         folium.CircleMarker(
             location=[vol.latitude, vol.longitude],
-            radius=5,
-            color="grey",
+            radius=5 if not is_assigned else 7,
+            color="#A0522D" if is_assigned else "grey",
             fill=True,
-            fill_color="grey",
-            fill_opacity=0.7,
-            tooltip=vol.name,
+            fill_color="#A0522D" if is_assigned else "grey",
+            fill_opacity=0.9 if is_assigned else 0.7,
+            tooltip=f"{vol.name} (Assigned)" if is_assigned else vol.name,
             popup=folium.Popup(f"{vol.name} ({vol.vehicle_type})", parse_html=True),
         ).add_to(m)
 
+    method_counters = {"volunteer": 0, "store_truck": 0, "commercial": 0}
+
+    route_list_items = []
+
     for delivery in deliveries:
         color = _METHOD_COLORS.get(delivery.method, "grey")
+        method_counters[delivery.method] += 1
+        seq_num = method_counters[delivery.method]
+        
         store = sm.get(delivery.store_id)
         if not store:
             continue
         store_coord = [store.latitude, store.longitude]
+        
         ch_coords = []
         for oid in delivery.order_ids:
             order = om.get(oid)
@@ -344,6 +358,7 @@ def generate_map(
                 if ch:
                     ch_coords.append([ch.latitude, ch.longitude])
 
+        vol_coord = None
         if delivery.method == "volunteer" and delivery.volunteer_id:
             vol = vm.get(delivery.volunteer_id)
             vol_coord = [vol.latitude, vol.longitude] if vol else None
@@ -358,27 +373,173 @@ def generate_map(
         if len(waypoints) < 2:
             continue
 
-        dash = "10 5" if delivery.method == "commercial" else None
-        tooltip_text = f"{delivery.method.replace('_', ' ').title()} | Store: {store.name}"
+        name_str = delivery.method.replace('_', ' ').title()
+        if delivery.method == "volunteer" and vol_coord:
+            name_str = vol.name.split()[0]
+        route_list_items.append(f"{seq_num}. {name_str}")
 
-        folium.PolyLine(
-            locations=waypoints,
+        has_polyline = False
+        path_coords = waypoints
+        if getattr(delivery, 'polyline', None):
+            try:
+                decoded = polyline.decode(delivery.polyline)
+                if decoded:
+                    path_coords = decoded
+                    has_polyline = True
+            except Exception:
+                pass
+
+        # Split into legs for arrows
+        legs = []
+        if delivery.method == "volunteer" and vol_coord:
+            def dist_sq(p1, p2):
+                return (p1[0]-p2[0])**2 + (p1[1]-p2[1])**2
+            min_dist = float('inf')
+            store_idx = 0
+            for i, pt in enumerate(path_coords):
+                d = dist_sq(pt, store_coord)
+                if d < min_dist:
+                    min_dist = d
+                    store_idx = i
+            if 0 < store_idx < len(path_coords) - 1:
+                legs.append(path_coords[:store_idx+1])
+                legs.append(path_coords[store_idx:])
+            else:
+                legs.append(path_coords)
+        else:
+            legs.append(path_coords)
+
+        dash = "10 5" if delivery.method == "commercial" else None
+        tooltip_text = f"#{seq_num} | {delivery.method.replace('_', ' ').title()} | Store: {store.name}"
+
+        poly_line = folium.PolyLine(
+            locations=path_coords,
             color=color,
             weight=3,
             opacity=0.8,
             dash_array=dash,
             tooltip=tooltip_text,
-        ).add_to(m)
+        )
+        poly_line.add_to(m)
+        
+        for leg in legs:
+            leg_poly = folium.PolyLine(locations=leg, opacity=0, weight=0)
+            leg_poly.add_to(m)
+            folium.plugins.PolyLineTextPath(
+                leg_poly,
+                "\u25BA",  # ►
+                center=True,
+                offset=7,
+                attributes={"fill": color, "font-size": "15px", "font-weight": "bold"}
+            ).add_to(m)
 
-    legend_html = """
-    <div style="position:fixed; bottom:30px; left:30px; z-index:1000;
-                background:white; padding:10px 14px; border:1px solid #aaa;
-                border-radius:6px; font-size:13px; line-height:1.8;">
-      <b>Delivery Method</b><br>
-      <span style="color:green;">&#9644;</span> Volunteer<br>
-      <span style="color:blue;">&#9644;</span> Store Truck<br>
-      <span style="color:orange;">&#9644;</span> Commercial<br>
-      <span style="color:grey;">&#9679;</span> Volunteer Home<br>
+        # Sequential milestones list for the route
+        milestones = []
+        if delivery.method == "volunteer" and vol_coord:
+            milestones.append(vol_coord)
+        milestones.append(store_coord)
+        milestones.extend(ch_coords)
+
+        # Progressive sequential milestone matching
+        milestone_indices = []
+        last_idx = 0
+        for ms in milestones:
+            min_d = float('inf')
+            best_idx = last_idx
+            for idx in range(last_idx, len(path_coords)):
+                pt = path_coords[idx]
+                d = (pt[0] - ms[0])**2 + (pt[1] - ms[1])**2
+                if d < min_d:
+                    min_d = d
+                    best_idx = idx
+            milestone_indices.append(best_idx)
+            last_idx = best_idx
+
+        # Isolate delivery legs (excluding volunteer-to-store pickup leg)
+        start_ms_idx = 1 if (delivery.method == "volunteer" and vol_coord) else 0
+        delivery_legs = []
+        for m_i in range(start_ms_idx, len(milestone_indices) - 1):
+            s_idx = milestone_indices[m_i]
+            e_idx = milestone_indices[m_i + 1]
+            if s_idx < e_idx:
+                delivery_legs.append(path_coords[s_idx:e_idx + 1])
+            else:
+                # Handle fallback if indices overlap or collide
+                delivery_legs.append([path_coords[s_idx], path_coords[e_idx]])
+
+        # Place sequence midpoint markers on each active delivery leg
+        for leg in delivery_legs:
+            if len(leg) >= 2:
+                total_dist = 0.0
+                segment_dists = []
+                for i in range(len(leg) - 1):
+                    p1 = leg[i]
+                    p2 = leg[i + 1]
+                    d = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+                    segment_dists.append(d)
+                    total_dist += d
+                
+                if total_dist > 0:
+                    target_dist = total_dist / 2.0
+                    curr_dist = 0.0
+                    mid_lat = None
+                    mid_lon = None
+                    for i in range(len(leg) - 1):
+                        d = segment_dists[i]
+                        if curr_dist + d >= target_dist:
+                            rem = target_dist - curr_dist
+                            f = rem / d if d > 0 else 0.0
+                            mid_lat = leg[i][0] + f * (leg[i + 1][0] - leg[i][0]) + 0.003
+                            mid_lon = leg[i][1] + f * (leg[i + 1][1] - leg[i][1])
+                            break
+                        curr_dist += d
+                    
+                    if mid_lat is None or mid_lon is None:
+                        mid_lat = leg[-1][0] + 0.003
+                        mid_lon = leg[-1][1]
+                else:
+                    mid_lat = leg[0][0] + 0.003
+                    mid_lon = leg[0][1]
+            else:
+                mid_lat = leg[0][0] + 0.003
+                mid_lon = leg[0][1]
+
+            folium.Marker(
+                location=[mid_lat, mid_lon],
+                icon=folium.DivIcon(
+                    html=f"""<div style="background-color: {color}; color: white; 
+                                border-radius: 50%; width: 20px; height: 20px; 
+                                display: flex; justify-content: center; align-items: center; 
+                                font-size: 12px; font-weight: bold; border: 1px solid white;">
+                            {seq_num}</div>""",
+                    icon_anchor=(10, 10),
+                ),
+                tooltip=tooltip_text
+            ).add_to(m)
+
+    route_list_html = "<b>Routes</b><br>" + "<br>".join(route_list_items)
+
+    legend_html = f"""
+    <div style="position:fixed; bottom:30px; right:30px; z-index:1000;
+                background:white; padding:15px; border:1px solid #aaa;
+                border-radius:6px; font-size:13px; line-height:1.8;
+                display:flex; flex-direction:row; gap:20px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);">
+      <div>
+          <b>Delivery Methods</b><br>
+          <span style="color:green;">&#9644;</span> Volunteer Route<br>
+          <span style="color:blue;">&#9644;</span> Store Truck Route<br>
+          <span style="color:orange;">&#9644;</span> Commercial Route<br>
+      </div>
+      <div>
+          <b>Locations</b><br>
+          <span style="color:#A0522D;">&#9679;</span> Assigned Volunteer<br>
+          <span style="color:grey;">&#9679;</span> Idle Volunteer<br>
+          <i class="fa fa-shopping-cart" style="color:blue"></i> Store<br>
+          <i class="fa fa-home" style="color:green"></i> Care Home<br>
+      </div>
+      <div>
+          {route_list_html}
+      </div>
     </div>
     """
     m.get_root().html.add_child(folium.Element(legend_html))
@@ -414,7 +575,9 @@ def generate_map(
     
     if not os.environ.get("RUNNING_ON_CLOUD_RUN"):
         m.save(filepath)
-        print(f"\n[Map] Saved to: {filepath}\n")
+        latest_map_path = str(_REPORTS_DIR / "map.html")
+        m.save(latest_map_path)
+        print(f"\n[Map] Saved to: {filepath} and {latest_map_path}\n")
     
     return filepath, map_html
 

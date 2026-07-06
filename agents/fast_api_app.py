@@ -100,46 +100,45 @@ app = FastAPI(
 
 @app.get("/", response_class=HTMLResponse)
 async def get_root() -> str:
-    """Return a loading page that calls /run in the background."""
-    html_content = """
+    """Return the cached latest summary html with disk fallback or a clean placeholder with refresh link."""
+    global _CACHED_SUMMARY
+    if _CACHED_SUMMARY:
+        return _CACHED_SUMMARY
+        
+    latest_summary_path = os.path.join("reports", "output", "latest_summary.html")
+    if os.path.exists(latest_summary_path):
+        try:
+            with open(latest_summary_path, "r", encoding="utf-8") as f:
+                _CACHED_SUMMARY = f.read()
+            return _CACHED_SUMMARY
+        except Exception:
+            pass
+            
+    # Clean placeholder page if no summary is found
+    placeholder_html = """
     <!DOCTYPE html>
     <html>
     <head>
         <title>SurplusCart: Agentic Food Rescue</title>
         <style>
             body { background: #000517; color: #04D8D9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 20vh; margin: 0; }
-            .spinner { width: 50px; height: 50px; border: 5px solid rgba(4, 216, 217, 0.3); border-radius: 50%; border-top-color: #04D8D9; animation: spin 1s ease-in-out infinite; margin: 0 auto 20px auto; }
-            @keyframes spin { to { transform: rotate(360deg); } }
-            h1 { font-weight: 300; letter-spacing: 1px; margin-bottom: 10px; }
-            p { color: #087C81; font-size: 14px; }
-            #content { opacity: 0; transition: opacity 0.5s ease-in; }
-            #loading { transition: opacity 0.5s ease-out; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            h1 { font-weight: 300; letter-spacing: 1px; margin-bottom: 20px; }
+            p { color: #087C81; font-size: 16px; margin-bottom: 30px; line-height: 1.6; }
+            .btn { display: inline-block; background: transparent; color: #04D8D9; border: 2px solid #04D8D9; padding: 12px 30px; font-size: 16px; border-radius: 4px; text-decoration: none; transition: all 0.3s ease; cursor: pointer; }
+            .btn:hover { background: #04D8D9; color: #000517; box-shadow: 0 0 15px rgba(4, 216, 217, 0.4); }
         </style>
-        <script>
-            window.onload = function() {
-                fetch('/run')
-                    .then(response => response.text())
-                    .then(html => {
-                        document.open();
-                        document.write(html);
-                        document.close();
-                    })
-                    .catch(err => {
-                        document.getElementById('loading').innerHTML = '<h1>Error running simulation</h1><p>' + err + '</p>';
-                    });
-            };
-        </script>
     </head>
     <body>
-        <div id="loading">
-            <div class="spinner"></div>
-            <h1>SurplusCart: Running Daily Simulation</h1>
-            <p>Agents are negotiating and dispatching orders... Please wait (~30s).</p>
+        <div class="container">
+            <h1>SurplusCart: Agentic Food Rescue</h1>
+            <p>Welcome! No completed food rescue simulation report was found. Press the button below to trigger and view the daily simulation run.</p>
+            <a href="/refresh" class="btn">Trigger Simulation Run</a>
         </div>
     </body>
     </html>
     """
-    return html_content
+    return placeholder_html
 
 # Global cache to prevent re-running the simulation on every refresh
 _CACHED_SUMMARY = None
@@ -179,25 +178,86 @@ async def run_sim(force: bool = False) -> str:
 
 @app.get("/refresh", response_class=HTMLResponse)
 async def refresh_sim() -> str:
-    """Clear the cache and redirect to run a fresh simulation."""
+    """Serve a loading page that triggers a fresh simulation via /run?force=true and redirects to /."""
     global _CACHED_SUMMARY, _CACHED_REPORT, _CACHED_MAP
     _CACHED_SUMMARY = None
     _CACHED_REPORT = None
     _CACHED_MAP = None
-    return "<script>window.location.href='/';</script>"
+    
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>SurplusCart: Agentic Food Rescue</title>
+        <style>
+            body { background: #000517; color: #04D8D9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 20vh; margin: 0; }
+            .spinner { width: 50px; height: 50px; border: 5px solid rgba(4, 216, 217, 0.3); border-radius: 50%; border-top-color: #04D8D9; animation: spin 1s ease-in-out infinite; margin: 0 auto 20px auto; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            h1 { font-weight: 300; letter-spacing: 1px; margin-bottom: 10px; }
+            p { color: #087C81; font-size: 14px; }
+            #loading { transition: opacity 0.5s ease-out; }
+        </style>
+        <script>
+            window.onload = function() {
+                fetch('/run?force=true')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok: ' + response.statusText);
+                        }
+                        return response.text();
+                    })
+                    .then(html => {
+                        window.location.href = '/';
+                    })
+                    .catch(err => {
+                        document.getElementById('loading').innerHTML = '<h1>Error running simulation</h1><p>' + err + '</p><p><a href="/refresh" style="color: #04D8D9;">Try again</a></p>';
+                    });
+            };
+        </script>
+    </head>
+    <body>
+        <div id="loading">
+            <div class="spinner"></div>
+            <h1>SurplusCart: Running Daily Simulation</h1>
+            <p>Agents are negotiating and dispatching orders... Please wait (~30s).</p>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content
 
+@app.get("/report.html", response_class=HTMLResponse)
 @app.get("/report", response_class=HTMLResponse)
 async def get_report() -> str:
-    """Return the cached detailed report HTML."""
+    """Return the cached detailed report HTML with disk fallback."""
+    global _CACHED_REPORT
     if _CACHED_REPORT:
         return _CACHED_REPORT
+    latest_report_path = os.path.join("reports", "output", "latest_report.html")
+    if os.path.exists(latest_report_path):
+        try:
+            with open(latest_report_path, "r", encoding="utf-8") as f:
+                _CACHED_REPORT = f.read()
+            return _CACHED_REPORT
+        except Exception:
+            pass
     return "<h1>Report not available.</h1><p>Please run the simulation first at <a href='/'>home</a>.</p>"
 
+@app.get("/map.html", response_class=HTMLResponse)
 @app.get("/map", response_class=HTMLResponse)
 async def get_map() -> str:
-    """Return the cached map HTML."""
+    """Return the cached map HTML with disk fallback."""
+    global _CACHED_MAP
     if _CACHED_MAP:
         return _CACHED_MAP
+    latest_map_path = os.path.join("reports", "output", "map.html")
+    if os.path.exists(latest_map_path):
+        try:
+            with open(latest_map_path, "r", encoding="utf-8") as f:
+                _CACHED_MAP = f.read()
+            return _CACHED_MAP
+        except Exception:
+            pass
     return "<h1>Map not available.</h1><p>Please run the simulation first at <a href='/'>home</a>.</p>"
 
 

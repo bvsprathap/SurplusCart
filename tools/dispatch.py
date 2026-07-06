@@ -69,6 +69,7 @@ _COMMERCIAL_CHANNEL = "commercial_pickup_dunzo_simulated"
 VolunteerAvailCallable = Callable[[str], Awaitable[Dict]]
 DistanceCallable = Callable[[float, float, float, float], Awaitable[float]]
 TruckAvailCallable = Callable[[str], Awaitable[Dict]]
+DirectionsPolylineCallable = Callable[[str, str, List[str]], Awaitable[Optional[str]]]
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +83,7 @@ async def run_dispatch(
     sim_day: SimulationDay,
     get_volunteer_avail: VolunteerAvailCallable,
     get_distance_minutes: DistanceCallable,
+    get_directions_polyline: DirectionsPolylineCallable,
     get_truck_avail: TruckAvailCallable,
     run_id: str,
 ) -> Tuple[List[Delivery], DispatchStats]:
@@ -211,6 +213,49 @@ async def run_dispatch(
                     care_home_map=care_home_map,
                     volunteer_map=volunteer_map,
                 )
+
+    # -- Step 6: Fetch polylines for visualization ----------------------------
+    om = {o.order_id: o for o in orders}
+    for delivery in deliveries:
+        store = store_map.get(delivery.store_id)
+        if not store:
+            continue
+        store_coord = f"{store.latitude},{store.longitude}"
+        
+        ch_coords = []
+        for oid in delivery.order_ids:
+            order = om.get(oid)
+            if order:
+                ch = care_home_map.get(order.care_home_id)
+                if ch:
+                    ch_coords.append(f"{ch.latitude},{ch.longitude}")
+        
+        if delivery.method == "volunteer" and delivery.volunteer_id:
+            vol = volunteer_map.get(delivery.volunteer_id)
+            if vol:
+                vol_coord = f"{vol.latitude},{vol.longitude}"
+                origin = vol_coord
+                if len(ch_coords) > 0:
+                    dest = ch_coords[-1]
+                    waypoints = [store_coord] + ch_coords[:-1]
+                else:
+                    dest = store_coord
+                    waypoints = []
+            else:
+                continue
+        else:
+            origin = store_coord
+            if len(ch_coords) > 0:
+                dest = ch_coords[-1]
+                waypoints = ch_coords[:-1]
+            else:
+                continue
+
+        try:
+            poly = await get_directions_polyline(origin, dest, waypoints)
+            delivery.polyline = poly
+        except Exception as e:
+            logger.warning(f"Failed to fetch polyline for delivery {delivery.delivery_id}: {e}")
 
     stats.total_deliveries = len(deliveries)
     return deliveries, stats

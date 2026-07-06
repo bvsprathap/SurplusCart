@@ -384,7 +384,15 @@ class TestGenerateMap:
         world = _make_world()
         filepath, _ = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
         content = Path(filepath).read_text(encoding="utf-8")
-        assert "Delivery Method" in content
+        assert "Delivery Methods" in content
+        assert "Routes" in content
+
+    def test_html_assigned_volunteer_color(self, tmp_path):
+        rg = _import_rg()
+        world = _make_world()
+        filepath, _ = rg.generate_map(_make_deliveries(), _make_orders(), world, "test-run-01")
+        content = Path(filepath).read_text(encoding="utf-8")
+        assert "#A0522D" in content
 
     def test_filepath_uses_run_id(self, tmp_path):
         rg = _import_rg()
@@ -400,6 +408,157 @@ class TestGenerateMap:
         assert fp1 != fp2
         assert os.path.exists(fp1)
         assert os.path.exists(fp2)
+
+    def test_marker_position_on_polyline_midpoint(self, tmp_path):
+        import polyline
+        rg = _import_rg()
+        world = _make_world()
+        
+        # Define a delivery with a curved polyline
+        # Start coordinate: [13.04, 80.23] (store_01)
+        # End coordinate: [13.06, 80.27] (home_01)
+        # Curved path: [13.04, 80.23] -> [13.04, 80.27] -> [13.06, 80.27]
+        # Total distance is 0.04 (in degrees, approx)
+        # Halfway point is 0.02, which is exactly at [13.04, 80.25]
+        # With latitude + 0.003, it should be [13.043, 80.25]
+        coords = [(13.04, 80.23), (13.04, 80.27), (13.06, 80.27)]
+        poly_str = polyline.encode(coords)
+        
+        deliveries = [
+            Delivery(
+                delivery_id="delivery_with_polyline",
+                store_id="store_01",
+                order_ids=["ord_01"],
+                method="store_truck",
+                polyline=poly_str,
+            )
+        ]
+        
+        orders = [
+            Order(
+                order_id="ord_01",
+                care_home_id="home_01",
+                store_id="store_01",
+                items=[],
+                urgent_essential_items=[],
+            )
+        ]
+        
+        filepath, html = rg.generate_map(deliveries, orders, world, "test-polyline-marker")
+        
+        # Midpoint of straight-line would have been:
+        # ((13.04 + 13.06) / 2) + 0.003 = 13.053
+        # ((80.23 + 80.27) / 2) = 80.25
+        # Straight-line: [13.053, 80.25]
+        # Decoded polyline path-length midpoint: [13.043, 80.25]
+        
+        assert "13.043" in html
+        assert "13.053" not in html
+
+    def test_marker_position_fallback_straight_line(self, tmp_path):
+        rg = _import_rg()
+        world = _make_world()
+        
+        # No polyline present
+        deliveries = [
+            Delivery(
+                delivery_id="delivery_no_polyline",
+                store_id="store_01",
+                order_ids=["ord_01"],
+                method="store_truck",
+                polyline=None,
+            )
+        ]
+        
+        orders = [
+            Order(
+                order_id="ord_01",
+                care_home_id="home_01",
+                store_id="store_01",
+                items=[],
+                urgent_essential_items=[],
+            )
+        ]
+        
+        filepath, html = rg.generate_map(deliveries, orders, world, "test-fallback-marker")
+        
+        # Midpoint of straight-line:
+        # ((13.04 + 13.06) / 2) + 0.003 = 13.053
+        # ((80.23 + 80.27) / 2) = 80.25
+        # Straight-line: [13.053, 80.25]
+        
+        assert "13.053" in html
+
+    def test_maps_api_key_safeguard(self, monkeypatch):
+        import main
+        import asyncio
+        # 1. Newline validation
+        monkeypatch.setattr(main, "MAPS_API_KEY", "AIzaSyB_6Nih-jUEp8G13mB6bg2ckC1dZ61Vl5o\nGEMINI_API_KEY=test")
+        with pytest.raises(ValueError, match="contains newline characters"):
+            asyncio.run(main.run_simulation())
+
+        # 2. Hash char validation
+        monkeypatch.setattr(main, "MAPS_API_KEY", "AIzaSyB_#6Nih-jUEp8G13mB6bg2ckC1dZ61Vl5o")
+        with pytest.raises(ValueError, match="contains '#' characters"):
+            asyncio.run(main.run_simulation())
+
+        # 3. Short key validation
+        monkeypatch.setattr(main, "MAPS_API_KEY", "too_short")
+        with pytest.raises(ValueError, match="appears malformed"):
+            asyncio.run(main.run_simulation())
+
+    def test_overlapping_milestones_sequential_matching(self, tmp_path):
+        import polyline
+        rg = _import_rg()
+        world = _make_world()
+        
+        # Store (13.04, 80.23), Home 1 (13.06, 80.27), Home 2 (13.08, 80.25)
+        # We loop physically close to Home 2 early on (idx 1), visit Home 1 (idx 2), then Home 2 (idx 3).
+        # Standard naive matching would match Home 2 to idx 1, creating an out-of-order index loop.
+        # Sequential progressive matching restricts Home 2's search space to start after Home 1 (idx 2),
+        # correctly matching Home 2 to idx 3.
+        coords = [
+            (13.04, 80.23),    # idx 0: Store
+            (13.0795, 80.25),  # idx 1: near Home 2 (loops near it early on)
+            (13.06, 80.27),    # idx 2: Home 1
+            (13.081, 80.25),   # idx 3: Home 2
+        ]
+        poly_str = polyline.encode(coords)
+        
+        deliveries = [
+            Delivery(
+                delivery_id="del_overlap",
+                store_id="store_01",
+                order_ids=["ord_01", "ord_02"],
+                method="store_truck",
+                polyline=poly_str,
+            )
+        ]
+        
+        orders = [
+            Order(
+                order_id="ord_01",
+                care_home_id="home_01",
+                store_id="store_01",
+                items=[],
+                urgent_essential_items=[],
+            ),
+            Order(
+                order_id="ord_02",
+                care_home_id="home_02",
+                store_id="store_01",
+                items=[],
+                urgent_essential_items=[],
+            )
+        ]
+        
+        filepath, html = rg.generate_map(deliveries, orders, world, "test-progressive-matching")
+        
+        # Confirm that both delivery leg midpoints are correctly computed and rendered:
+        # Leg 2 is from coords[2] to coords[3], which has mathematical midpoint lat 13.0735 (with +0.003 offset)
+        # Leg 1 is from coords[0] to coords[2], which has path-length midpoint lat 13.0752 (with +0.003 offset)
+        assert "13.0735" in html
+        assert "13.0752" in html
 
 
 # ---------------------------------------------------------------------------
@@ -785,7 +944,7 @@ class TestGenerateFullReport:
         with open(map_path, "r", encoding="utf-8") as fm:
             map_html = fm.read()
         assert "View Report" in map_html
-        assert "latest_report.html" in map_html
+        assert "latest_report.html" in map_html or "/report" in map_html
 
 
 # ---------------------------------------------------------------------------

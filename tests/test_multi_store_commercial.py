@@ -57,9 +57,10 @@ async def test_multi_store_commercial_attribution():
     sim_day = SimulationDay(run_id="run-1", stores=[], volunteers=[])
     
     # Mock callables for dispatch
-    async def mock_get_volunteer_avail(vid): return True
+    async def mock_get_volunteer_avail(vid): return {"volunteer_id": vid, "available": True}
     async def mock_get_distance_minutes(lat1, lon1, lat2, lon2): return 10.0
-    async def mock_get_truck_avail(sid): return {"available": True}
+    async def mock_get_directions_polyline(origin, destination, waypoints): return "encoded_polyline_string"
+    async def mock_get_truck_avail(sid): return {"available": True, "capacity_kg": 3000.0}
 
     deliveries, stats = await run_dispatch(
         orders=[order_a, order_b],
@@ -68,6 +69,7 @@ async def test_multi_store_commercial_attribution():
         sim_day=sim_day,
         get_volunteer_avail=mock_get_volunteer_avail,
         get_distance_minutes=mock_get_distance_minutes,
+        get_directions_polyline=mock_get_directions_polyline,
         get_truck_avail=mock_get_truck_avail,
         run_id="run-1"
     )

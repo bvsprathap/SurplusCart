@@ -311,7 +311,7 @@ def _build_patches(
     # Mock run_dispatch
     async def mock_run_dispatch(orders, needs_commercial_items, world, sim_day,
                                 get_volunteer_avail, get_distance_minutes,
-                                get_truck_avail, run_id):
+                                get_directions_polyline, get_truck_avail, run_id):
         deliveries = []
         for order in orders:
             deliveries.append(Delivery(

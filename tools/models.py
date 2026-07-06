@@ -66,6 +66,7 @@ class Delivery(BaseModel):
     method: Literal["volunteer", "store_truck", "commercial"]
     volunteer_id: Optional[str] = None
     pickup_time: Optional[str] = None
+    polyline: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

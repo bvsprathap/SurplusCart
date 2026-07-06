@@ -129,8 +129,8 @@ graph TD
 
 ### Installation
 ```bash
-git clone https://github.com/bvsprathap/Surplus-to-Smiles
-cd Surplus-to-Smiles
+git clone https://github.com/bvsprathap/SurplusCart
+cd SurplusCart
 python -m venv .venv
 .venv\Scripts\activate  # Windows
 pip install -r requirements.txt
@@ -167,7 +167,7 @@ python -m pytest tests/ -v
 
 ## Project Structure
 ```
-Surplus-to-Smiles/
+SurplusCart/
 ├── catalog.json          # Fixed food item catalog (31 items)
 ├── world_config.json     # Fixed Chennai scenario
 ├── main.py               # Orchestrator entrypoint
