@@ -105,6 +105,14 @@ async def get_root() -> str:
     if _CACHED_SUMMARY:
         return _CACHED_SUMMARY
         
+    # 1. Try reading from GCS
+    from agents.app_utils.cooldown import read_gcs_report_file
+    gcs_content = read_gcs_report_file("latest_summary.html")
+    if gcs_content:
+        _CACHED_SUMMARY = gcs_content
+        return _CACHED_SUMMARY
+
+    # 2. Try reading from Local Disk fallback
     latest_summary_path = os.path.join("reports", "output", "latest_summary.html")
     if os.path.exists(latest_summary_path):
         try:
@@ -151,6 +159,27 @@ async def run_sim(force: bool = False) -> str:
     """Run the simulation once and cache the HTML report."""
     global _CACHED_SUMMARY, _CACHED_REPORT, _CACHED_MAP, _IS_RUNNING
     
+    # 1. Pre-fetch cached summary from GCS or disk if not in memory
+    if not _CACHED_SUMMARY:
+        from agents.app_utils.cooldown import read_gcs_report_file
+        _CACHED_SUMMARY = read_gcs_report_file("latest_summary.html")
+        if not _CACHED_SUMMARY:
+            latest_summary_path = os.path.join("reports", "output", "latest_summary.html")
+            if os.path.exists(latest_summary_path):
+                try:
+                    with open(latest_summary_path, "r", encoding="utf-8") as f:
+                        _CACHED_SUMMARY = f.read()
+                except Exception:
+                    pass
+
+    # 2. Handle cooldown and active run concurrency checks
+    from agents.app_utils.cooldown import is_in_cooldown
+    if force:
+        if _IS_RUNNING:
+            return _CACHED_SUMMARY or "<h1>Simulation is currently running. Please wait a moment and refresh.</h1>"
+        if is_in_cooldown():
+            return _CACHED_SUMMARY or "<h1>Simulation is in cooldown. Showing last run.</h1>"
+            
     if _CACHED_SUMMARY and not force:
         return _CACHED_SUMMARY
         
@@ -172,13 +201,32 @@ async def run_sim(force: bool = False) -> str:
         _CACHED_SUMMARY = summary_content
         _CACHED_REPORT = html_content
         _CACHED_MAP = map_content
+        
+        # 3. Persist the run details
+        import datetime
+        from agents.app_utils.cooldown import set_last_run_timestamp, write_gcs_report_file
+        
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        set_last_run_timestamp(now)
+        
+        write_gcs_report_file("latest_summary.html", summary_content)
+        write_gcs_report_file("latest_report.html", html_content)
+        write_gcs_report_file("map.html", map_content)
+        
         return summary_content
     finally:
         _IS_RUNNING = False
 
 @app.get("/refresh", response_class=HTMLResponse)
-async def refresh_sim() -> str:
-    """Serve a loading page that triggers a fresh simulation via /run?force=true and redirects to /."""
+async def refresh_sim():
+    """Serve a loading page that triggers a fresh simulation via /run?force=true and redirects to /, with a 15m cooldown."""
+    from fastapi.responses import RedirectResponse
+    from agents.app_utils.cooldown import is_in_cooldown
+    
+    # Silent redirect if cooldown is active
+    if is_in_cooldown():
+        return RedirectResponse(url="/", status_code=303)
+        
     global _CACHED_SUMMARY, _CACHED_REPORT, _CACHED_MAP
     _CACHED_SUMMARY = None
     _CACHED_REPORT = None
@@ -224,15 +272,24 @@ async def refresh_sim() -> str:
     </body>
     </html>
     """
-    return html_content
+    return HTMLResponse(content=html_content)
 
 @app.get("/report.html", response_class=HTMLResponse)
 @app.get("/report", response_class=HTMLResponse)
 async def get_report() -> str:
-    """Return the cached detailed report HTML with disk fallback."""
+    """Return the cached detailed report HTML with GCS and disk fallback."""
     global _CACHED_REPORT
     if _CACHED_REPORT:
         return _CACHED_REPORT
+        
+    # 1. GCS fallback
+    from agents.app_utils.cooldown import read_gcs_report_file
+    gcs_content = read_gcs_report_file("latest_report.html")
+    if gcs_content:
+        _CACHED_REPORT = gcs_content
+        return _CACHED_REPORT
+
+    # 2. Disk fallback
     latest_report_path = os.path.join("reports", "output", "latest_report.html")
     if os.path.exists(latest_report_path):
         try:
@@ -246,10 +303,19 @@ async def get_report() -> str:
 @app.get("/map.html", response_class=HTMLResponse)
 @app.get("/map", response_class=HTMLResponse)
 async def get_map() -> str:
-    """Return the cached map HTML with disk fallback."""
+    """Return the cached map HTML with GCS and disk fallback."""
     global _CACHED_MAP
     if _CACHED_MAP:
         return _CACHED_MAP
+        
+    # 1. GCS fallback
+    from agents.app_utils.cooldown import read_gcs_report_file
+    gcs_content = read_gcs_report_file("map.html")
+    if gcs_content:
+        _CACHED_MAP = gcs_content
+        return _CACHED_MAP
+
+    # 2. Disk fallback
     latest_map_path = os.path.join("reports", "output", "map.html")
     if os.path.exists(latest_map_path):
         try:

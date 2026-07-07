@@ -1,0 +1,25 @@
+# Ignore common developer clutter
+.git/
+.venv/
+__pycache__/
+*.pyc
+
+# Ignore testing and pytest cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Ignore local run databases or private env files
+.adk/
+.env
+.env.*
+
+# Ignore scratch folders
+scratch/
+
+# Do NOT ignore the key report files under reports/output/
+# We want these baked into the Docker image as reliable boot fallbacks
+reports/output/*
+!reports/output/latest_summary.html
+!reports/output/latest_report.html
+!reports/output/map.html
