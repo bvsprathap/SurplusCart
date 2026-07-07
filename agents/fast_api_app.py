@@ -223,8 +223,8 @@ async def refresh_sim():
     from fastapi.responses import RedirectResponse
     from agents.app_utils.cooldown import is_in_cooldown
     
-    # Silent redirect if cooldown is active
-    if is_in_cooldown():
+    # Silent redirect if cooldown is active or a run is already in progress
+    if is_in_cooldown() or _IS_RUNNING:
         return RedirectResponse(url="/", status_code=303)
         
     global _CACHED_SUMMARY, _CACHED_REPORT, _CACHED_MAP

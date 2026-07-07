@@ -116,6 +116,14 @@ def test_no_concurrent_runs(clean_cooldown_state):
         mock_run_simulation.assert_not_called()
 
 
+def test_refresh_redirects_during_active_run(clean_cooldown_state):
+    """Verify that hitting /refresh while a run is in progress silently redirects to /."""
+    with patch("agents.fast_api_app._IS_RUNNING", True):
+        response = client.get("/refresh", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/"
+
+
 def test_default_page_behavior_unchanged(clean_cooldown_state):
     """Default page (/) behavior is unchanged — still serves last completed static report regardless of cooldown state."""
     # Scenario A: In cooldown
