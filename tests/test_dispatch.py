@@ -867,3 +867,263 @@ class TestGuardrailFailureFallthrough:
         # First delivery has 2 order_ids, second has 1
         order_id_counts = sorted([len(d.order_ids) for d in deliveries], reverse=True)
         assert order_id_counts == [2, 1]
+
+
+class TestVolunteerStatusAndDetour:
+    @pytest.mark.asyncio
+    async def test_volunteer_never_assigned_to_multiple_routes(self):
+        # Ensure a volunteer is never assigned to multiple independent routes/stores
+        store1 = _make_store("store_01", lat=13.0, lng=80.2)
+        store2 = _make_store("store_02", lat=13.1, lng=80.3)
+        ch1 = _make_care_home("home_01", lat=13.02, lng=80.22)
+        ch2 = _make_care_home("home_02", lat=13.12, lng=80.32)
+        vol = _make_volunteer("vol_01", lat=13.01, lng=80.21, capacity_kg=100.0)
+
+        world = _make_world(stores=[store1, store2], care_homes=[ch1, ch2], volunteers=[vol])
+        sim_day = _make_sim_day(world)
+
+        orders = [
+            _make_order("ord_01", care_home_id="home_01", store_id="store_01"),
+            _make_order("ord_02", care_home_id="home_02", store_id="store_02"),
+        ]
+
+        # Use 10 minutes for all distances
+        async def dist_fn(lat1, lng1, lat2, lng2):
+            return 10.0
+
+        deliveries, stats = await run_dispatch(
+            orders=orders,
+            needs_commercial_items=[],
+            world=world,
+            sim_day=sim_day,
+            get_volunteer_avail=_avail_mock(available=True),
+            get_distance_minutes=dist_fn,
+            get_directions_polyline=_polyline_mock(),
+            get_truck_avail=_truck_mock(available=True),
+            run_id="test-run",
+        )
+
+        # vol_01 should be assigned to the first store's order (store_01).
+        # Since they are in independent routes/stores, vol_01 cannot be assigned to store_02's order.
+        # store_02's order should fall back to store_truck.
+        assert len(deliveries) == 2
+        
+        volunteer_deliveries = [d for d in deliveries if d.method == "volunteer"]
+        truck_deliveries = [d for d in deliveries if d.method == "store_truck"]
+
+        assert len(volunteer_deliveries) == 1
+        assert volunteer_deliveries[0].volunteer_id == "vol_01"
+        assert volunteer_deliveries[0].store_id == "store_01"
+
+        assert len(truck_deliveries) == 1
+        assert truck_deliveries[0].store_id == "store_02"
+
+    @pytest.mark.asyncio
+    async def test_dynamic_detour_bundling_under_15_mins(self):
+        # Test Step 3 detour bundling under 15 minutes
+        store = _make_store("store_01", lat=13.0, lng=80.2)
+        ch_a = _make_care_home("home_01", lat=13.05, lng=80.25)
+        ch_b = _make_care_home("home_02", lat=13.03, lng=80.23)
+        vol = _make_volunteer("vol_01", lat=13.01, lng=80.21, capacity_kg=100.0)
+
+        world = _make_world(stores=[store], care_homes=[ch_a, ch_b], volunteers=[vol])
+        
+        from tools.dispatch import _assign_delivery
+        
+        # Existing delivery with 1 order to ch_a
+        d_existing = Delivery(
+            delivery_id="del_existing",
+            store_id="store_01",
+            order_ids=["ord_01"],
+            method="volunteer",
+            volunteer_id="vol_01",
+            pickup_time="10:00",
+        )
+        deliveries = [d_existing]
+
+        order_a = _make_order("ord_01", care_home_id="home_01", store_id="store_01")
+        order_b = _make_order("ord_02", care_home_id="home_02", store_id="store_01")
+        
+        volunteer_map = {"vol_01": vol}
+        order_map = {"ord_01": order_a, "ord_02": order_b}
+        care_home_map = {"home_01": ch_a, "home_02": ch_b}
+        store_map = {"store_01": store}
+        catalog_map = {c.name.lower(): c for c in world.catalog}
+
+        # direct = 10, via_b = 5, b_to_a = 8 -> detour = 13, extra = 3. vol_to_store = 5.
+        # Total travel time = 5 + 5 + 8 = 18 mins (< 2 hours)
+        async def dist_fn(lat1, lng1, lat2, lng2):
+            if lat1 == 13.01 and lat2 == 13.0:
+                return 5.0
+            if lat1 == 13.0 and lat2 == 13.05:
+                return 10.0
+            if lat1 == 13.0 and lat2 == 13.03:
+                return 5.0
+            if lat1 == 13.03 and lat2 == 13.05:
+                return 8.0
+            return 10.0
+
+        stats = DispatchStats()
+
+        result = await _assign_delivery(
+            batch=[order_b],
+            store=store,
+            order_ids=["ord_02"],
+            payload_kg=20.0,
+            has_urgent=False,
+            available_volunteers=[],  # Empty available volunteers pool
+            care_home_map=care_home_map,
+            store_map=store_map,
+            catalog_map=catalog_map,
+            get_distance_minutes=dist_fn,
+            get_truck_avail=_truck_mock(),
+            stats=stats,
+            deliveries=deliveries,
+            volunteer_map=volunteer_map,
+            order_map=order_map,
+        )
+
+        # Should detour-bundle ord_02 into d_existing, returning None (no new delivery)
+        assert result is None
+        assert len(deliveries) == 1
+        assert d_existing.order_ids == ["ord_02", "ord_01"]
+
+    @pytest.mark.asyncio
+    async def test_dynamic_detour_bundling_rejected_over_15_mins(self):
+        # Test Step 3 detour bundling rejected when detour is > 15 minutes
+        store = _make_store("store_01", lat=13.0, lng=80.2)
+        ch_a = _make_care_home("home_01", lat=13.05, lng=80.25)
+        ch_b = _make_care_home("home_02", lat=14.0, lng=81.0)
+        vol = _make_volunteer("vol_01", lat=13.01, lng=80.21, capacity_kg=100.0)
+
+        world = _make_world(stores=[store], care_homes=[ch_a, ch_b], volunteers=[vol])
+        
+        from tools.dispatch import _assign_delivery
+        
+        d_existing = Delivery(
+            delivery_id="del_existing",
+            store_id="store_01",
+            order_ids=["ord_01"],
+            method="volunteer",
+            volunteer_id="vol_01",
+            pickup_time="10:00",
+        )
+        deliveries = [d_existing]
+
+        order_a = _make_order("ord_01", care_home_id="home_01", store_id="store_01")
+        order_b = _make_order("ord_02", care_home_id="home_02", store_id="store_01")
+        
+        volunteer_map = {"vol_01": vol}
+        order_map = {"ord_01": order_a, "ord_02": order_b}
+        care_home_map = {"home_01": ch_a, "home_02": ch_b}
+        store_map = {"store_01": store}
+        catalog_map = {c.name.lower(): c for c in world.catalog}
+
+        # direct = 10, via_b = 50, b_to_a = 45 -> detour = 95, extra = 85 mins (> 15 mins detour)
+        async def dist_fn(lat1, lng1, lat2, lng2):
+            if lat1 == 13.01 and lat2 == 13.0:
+                return 5.0
+            if lat1 == 13.0 and lat2 == 13.05:
+                return 10.0
+            if lat1 == 13.0 and lat2 == 14.0:
+                return 50.0
+            if lat1 == 14.0 and lat2 == 13.05:
+                return 45.0
+            return 10.0
+
+        stats = DispatchStats()
+
+        result = await _assign_delivery(
+            batch=[order_b],
+            store=store,
+            order_ids=["ord_02"],
+            payload_kg=20.0,
+            has_urgent=False,
+            available_volunteers=[],  # Empty available volunteers pool
+            care_home_map=care_home_map,
+            store_map=store_map,
+            catalog_map=catalog_map,
+            get_distance_minutes=dist_fn,
+            get_truck_avail=_truck_mock(available=False),  # Truck unavailable
+            stats=stats,
+            deliveries=deliveries,
+            volunteer_map=volunteer_map,
+            order_map=order_map,
+        )
+
+        # Should reject detour-bundling, skip truck (unavailable), and fall back to commercial
+        assert result is not None
+        assert result.method == "commercial"
+        assert result.order_ids == ["ord_02"]
+        assert len(deliveries) == 1
+        assert d_existing.order_ids == ["ord_01"]
+
+    @pytest.mark.asyncio
+    async def test_dynamic_detour_bundling_rejected_over_2_hours(self):
+        # Test Step 3 detour bundling rejected when total travel time > 2 hours (120 mins)
+        store = _make_store("store_01", lat=13.0, lng=80.2)
+        ch_a = _make_care_home("home_01", lat=13.05, lng=80.25)
+        ch_b = _make_care_home("home_02", lat=13.03, lng=80.23)
+        vol = _make_volunteer("vol_01", lat=13.01, lng=80.21, capacity_kg=100.0)
+
+        world = _make_world(stores=[store], care_homes=[ch_a, ch_b], volunteers=[vol])
+        
+        from tools.dispatch import _assign_delivery
+        
+        d_existing = Delivery(
+            delivery_id="del_existing",
+            store_id="store_01",
+            order_ids=["ord_01"],
+            method="volunteer",
+            volunteer_id="vol_01",
+            pickup_time="10:00",
+        )
+        deliveries = [d_existing]
+
+        order_a = _make_order("ord_01", care_home_id="home_01", store_id="store_01")
+        order_b = _make_order("ord_02", care_home_id="home_02", store_id="store_01")
+        
+        volunteer_map = {"vol_01": vol}
+        order_map = {"ord_01": order_a, "ord_02": order_b}
+        care_home_map = {"home_01": ch_a, "home_02": ch_b}
+        store_map = {"store_01": store}
+        catalog_map = {c.name.lower(): c for c in world.catalog}
+
+        # direct = 10, via_b = 5, b_to_a = 8 -> detour = 13, extra = 3 mins (valid detour!)
+        # BUT vol_to_store = 110 mins -> total travel time = 110 + 5 + 8 = 123 mins (> 2 hours limit)
+        async def dist_fn(lat1, lng1, lat2, lng2):
+            if lat1 == 13.01 and lat2 == 13.0:
+                return 110.0
+            if lat1 == 13.0 and lat2 == 13.05:
+                return 10.0
+            if lat1 == 13.0 and lat2 == 13.03:
+                return 5.0
+            if lat1 == 13.03 and lat2 == 13.05:
+                return 8.0
+            return 10.0
+
+        stats = DispatchStats()
+
+        result = await _assign_delivery(
+            batch=[order_b],
+            store=store,
+            order_ids=["ord_02"],
+            payload_kg=20.0,
+            has_urgent=False,
+            available_volunteers=[],  # Empty available volunteers pool
+            care_home_map=care_home_map,
+            store_map=store_map,
+            catalog_map=catalog_map,
+            get_distance_minutes=dist_fn,
+            get_truck_avail=_truck_mock(available=False),  # Truck unavailable
+            stats=stats,
+            deliveries=deliveries,
+            volunteer_map=volunteer_map,
+            order_map=order_map,
+        )
+
+        # Should reject detour-bundling due to budget, and fall back to commercial
+        assert result is not None
+        assert result.method == "commercial"
+        assert len(deliveries) == 1
+        assert d_existing.order_ids == ["ord_01"]

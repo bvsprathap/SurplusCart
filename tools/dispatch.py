@@ -174,6 +174,7 @@ async def run_dispatch(
     commercial_order_ids = {nc["order_id"] for nc in needs_commercial_items} if needs_commercial_items else set()
     standard_orders = [o for o in orders if o.order_id not in commercial_order_ids]
     grouped = _group_orders_by_store(standard_orders)  # {store_id: [Order, ...]}
+    om = {o.order_id: o for o in orders}
 
     # -- Step 1–5: Assign delivery method per Delivery group ------------------
     for store_id, store_orders in grouped.items():
@@ -203,16 +204,24 @@ async def run_dispatch(
                 get_distance_minutes=get_distance_minutes,
                 get_truck_avail=get_truck_avail,
                 stats=stats,
+                deliveries=deliveries,
+                volunteer_map=volunteer_map,
+                order_map=om,
             )
             if delivery:
                 deliveries.append(delivery)
                 _send_confirmation_messages(
                     delivery=delivery,
-                    batch=batch,
+                    batch=[om[oid] for oid in delivery.order_ids if oid in om],
                     store=store,
                     care_home_map=care_home_map,
                     volunteer_map=volunteer_map,
                 )
+                if delivery.method == "volunteer" and delivery.volunteer_id:
+                    available_volunteers = [
+                        v for v in available_volunteers
+                        if v.volunteer_id != delivery.volunteer_id
+                    ]
 
     # -- Step 6: Fetch polylines for visualization ----------------------------
     om = {o.order_id: o for o in orders}
@@ -311,6 +320,9 @@ async def _assign_delivery(
     get_distance_minutes: DistanceCallable,
     get_truck_avail: TruckAvailCallable,
     stats: DispatchStats,
+    deliveries: List[Delivery],
+    volunteer_map: Dict[str, Volunteer],
+    order_map: Dict[str, Order],
 ) -> Optional[Delivery]:
     """
     Walk the fallback chain in strict order and return the first valid Delivery.
@@ -335,16 +347,87 @@ async def _assign_delivery(
         if volunteer_result:
             return volunteer_result
 
+    # -- Step 3: Detour Bundling (Consolidate onto existing volunteer runs) ----
+    bundled_order_ids = set()
+    for o_id in order_ids:
+        order = order_map.get(o_id)
+        if not order:
+            continue
+        ch_new = care_home_map.get(order.care_home_id)
+        if not ch_new:
+            continue
+        single_payload = _total_payload_kg([order], catalog_map)
+
+        for existing_delivery in deliveries:
+            if (existing_delivery.method == "volunteer" and
+                existing_delivery.store_id == store.store_id and
+                len(existing_delivery.order_ids) == 1):
+
+                vol = volunteer_map.get(existing_delivery.volunteer_id)
+                existing_order_id = existing_delivery.order_ids[0]
+                existing_order = order_map.get(existing_order_id)
+                ch_existing = care_home_map.get(existing_order.care_home_id) if existing_order else None
+
+                if not vol or not ch_existing:
+                    continue
+
+                # 1. Check weight capacity
+                existing_weight = _total_payload_kg([existing_order], catalog_map) if existing_order else 0.0
+                if existing_weight + single_payload > vol.capacity_kg:
+                    continue
+
+                # 2. Check detour constraint (<= 15 minutes extra duration)
+                should_bundle, extra = await check_detour_bundle(
+                    store=store,
+                    care_home_a=ch_existing,
+                    care_home_b=ch_new,
+                    get_distance_minutes=get_distance_minutes
+                )
+                if not should_bundle:
+                    continue
+
+                # 3. Check 2-hour budget constraint (total travel time <= 120 mins)
+                vol_to_store = await get_distance_minutes(vol.latitude, vol.longitude, store.latitude, store.longitude)
+                store_to_ch_new = await get_distance_minutes(store.latitude, store.longitude, ch_new.latitude, ch_new.longitude)
+                ch_new_to_ch_existing = await get_distance_minutes(ch_new.latitude, ch_new.longitude, ch_existing.latitude, ch_existing.longitude)
+                total_time = vol_to_store + store_to_ch_new + ch_new_to_ch_existing
+
+                if total_time <= 120.0:
+                    existing_delivery.order_ids = [o_id, existing_delivery.order_ids[0]]
+                    bundled_order_ids.add(o_id)
+                    logger.info(
+                        "Detour Bundling: Appended order %s onto volunteer %s's route (detour: +%.1f mins, total time: %.1f mins)",
+                        o_id, vol.name, extra, total_time
+                    )
+                    from tools.logger import log_message
+                    log_message(
+                        to=vol.volunteer_id,
+                        channel="whatsapp_simulated",
+                        content=(
+                            f"Hi {vol.name}, detour accepted! Delivering to both {ch_new.name} and "
+                            f"{ch_existing.name} (detour: +{extra:.1f} mins, total time: {total_time:.1f} mins)."
+                        )
+                    )
+                    break
+
+    if len(bundled_order_ids) == len(order_ids):
+        return None
+
+    remaining_order_ids = [oid for oid in order_ids if oid not in bundled_order_ids]
+    remaining_care_home_ids = [order_map[oid].care_home_id for oid in remaining_order_ids if oid in order_map]
+    remaining_payload = _total_payload_kg([order_map[oid] for oid in remaining_order_ids if oid in order_map], catalog_map)
+    remaining_has_urgent = any(bool(order_map[oid].urgent_essential_items) for oid in remaining_order_ids if oid in order_map)
+
     # -- Step 4: Store's own truck --------------------------------------------
     truck_result = await _try_store_truck(
         store=store,
-        order_ids=order_ids,
-        payload_kg=payload_kg,
-        care_home_ids=care_home_ids,
+        order_ids=remaining_order_ids,
+        payload_kg=remaining_payload,
+        care_home_ids=remaining_care_home_ids,
         care_home_map=care_home_map,
         get_truck_avail=get_truck_avail,
         get_distance_minutes=get_distance_minutes,
-        has_urgent=has_urgent,
+        has_urgent=remaining_has_urgent,
         stats=stats,
     )
     if truck_result:
@@ -352,16 +435,16 @@ async def _assign_delivery(
 
     # -- Step 5: Commercial pickup (always succeeds) --------------------------
     commercial = await _make_commercial_delivery(
-        items=[line for o in batch for line in o.items],
+        items=[line for oid in remaining_order_ids if oid in order_map for line in order_map[oid].items],
         store_id=store.store_id,
-        order_ids=order_ids,
+        order_ids=remaining_order_ids,
         world=None,
         care_home_map=care_home_map,
         store_map=store_map,
         catalog_map=catalog_map,
         stats=stats,
         label=f"fallback for store {store.store_id}",
-        has_urgent=has_urgent,
+        has_urgent=remaining_has_urgent,
     )
     return commercial
 
