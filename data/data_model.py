@@ -125,11 +125,13 @@ def setup_world(config_filepath: str = "world_config.json", catalog_filepath: st
     # Load and deserialize world_config.json
     with open(config_filepath, "r", encoding="utf-8") as f:
         world_data = json.load(f)
+        availability_rate = world_data.get("availability_rate", 0.7)
         stores = [Store.model_validate(s) for s in world_data.get("stores", [])]
         care_homes = [CareHome.model_validate(ch) for ch in world_data.get("care_homes", [])]
         volunteers = [Volunteer.model_validate(v) for v in world_data.get("volunteers", [])]
 
     return WorldConfig(
+        availability_rate=availability_rate,
         catalog=catalog,
         stores=stores,
         care_homes=care_homes,
